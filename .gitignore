@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+.venv/
+.devcontainer/
+.vscode/
+
+# runtime outputs
+/figures/
+/runs/
+/checkpoints/
+
+# experimental
+src/pretrain/trainer_lejepa.py
+
+# data files
+/_papers-repos/
+/third_party/
+/datasets/
+*.model
+*.vocab
+*.pth
+*.pt
+*.bin
+*.pkl

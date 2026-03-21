@@ -1,0 +1,15 @@
+dask
+numpy
+scipy
+pandas
+matplotlib
+openpyxl
+rdkit
+psmiles @ git+https://github.com/Ramprasad-Group/psmiles.git
+scikit-learn
+accelerate
+transformers
+datasets
+sentencepiece
+sentence-transformers
+tensorboard
