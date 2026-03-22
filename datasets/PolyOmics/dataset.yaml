@@ -1,0 +1,31 @@
+name: PolyOmics
+data_file: cleaned.csv
+smiles_column: smiles_list
+categories:
+  Thermal:
+    - thermal_conductivity
+    - thermal_diffusivity
+    - CLTE
+    - tg
+  Thermodynamic & physical:
+    - density
+    - Rg
+    - self-diffusion
+    - Cp
+    - Cv
+  Electronic:
+    - qm_homo_monomer1
+    - qm_lumo_monomer1
+    - qm_dipole_monomer1
+    - qm_polarizability_monomer1
+  Optical & dielectric:
+    - static_dielectric_const
+    - refractive_index
+  Mechanical:
+    - compressibility
+    - isentropic_compressibility
+    - bulk_modulus
+    - isentropic_bulk_modulus
+transforms:
+  log10: []
+  logm1: []

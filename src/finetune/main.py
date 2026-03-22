@@ -1,15 +1,11 @@
-from trainer import MultiTaskTrainer
+from trainer import MultiTaskTrainer, PolymerDataset
 
 if __name__ == '__main__':
     import os
     os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
-    dataset_config = dict(
-        name='MTL',
-        path='./datasets/MTL_Khazana/pivot_table.csv',
-        # name='PolyOmics',
-        # path='./datasets/PolyOmics/cleaned.csv',
-    )
+    dataset_dir = './datasets/MTL_Khazana'
+    # dataset_dir = './datasets/PolyOmics'
     model_config = dict(
         input_dim=512 * 3,
         hidden_dim=512,
@@ -17,15 +13,18 @@ if __name__ == '__main__':
         dropout=0.2,
     )
 
-    output_name = 'MTL/PoCo-final'
     encoder_path = './checkpoints/PoCo/final'
+    dataset = PolymerDataset.from_dir(
+        dataset_dir,
+        encoder_path=encoder_path,
+        concat_last_layers=3,
+    )
+    output_name = f'{dataset.name}/PoCo-final'
 
     trainer = MultiTaskTrainer(
-        model_config, dataset_config,
-        encoder_path=encoder_path,
+        model_config, dataset,
         output_dir=f'./checkpoints/{output_name}',
         logging_dir=f'./runs/{output_name}',
-        concat_last_layers=3,
         n_folds=5,
         n_trials=3,
         max_epochs=200,
@@ -35,16 +34,19 @@ if __name__ == '__main__':
     trainer.train()
     exit()
 
-    output_name = 'MTL/PoCo-10k'
     encoder_dir = './checkpoints/PoCo-10k'
     all_checkpoints = [f'checkpoint-{step}' for step in range(10000, 50001, 10000)]
 
     for checkpoint in all_checkpoints:
         encoder_path = f'{encoder_dir}/{checkpoint}'
+        dataset = PolymerDataset.from_dir(
+            dataset_dir,
+            encoder_path=encoder_path,
+        )
+        output_name = f'{dataset.name}/PoCo-10k'
 
         trainer = MultiTaskTrainer(
-            model_config, dataset_config,
-            encoder_path=encoder_path,
+            model_config, dataset,
             output_dir=f'./checkpoints/{output_name}/{checkpoint}',
             n_folds=5,
             n_trials=3,

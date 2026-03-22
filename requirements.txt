@@ -13,3 +13,4 @@ datasets
 sentencepiece
 sentence-transformers
 tensorboard
+PyYAML
