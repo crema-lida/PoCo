@@ -2,16 +2,30 @@ from trainer import MultiTaskTrainer, PolymerDataset
 
 if __name__ == '__main__':
     datasets = [
+        # dict(
+        #     name='MTL',
+        #     dir='./datasets/MTL_Khazana',
+        #     n_trials=3,
+        #     batch_size=32,
+        # ),
+        # dict(
+        #     name='PolyOmics',
+        #     dir='./datasets/PolyOmics',
+        #     n_trials=1,
+        #     batch_size=256,
+        # ),
         dict(
-            dir='./datasets/MTL_Khazana',
+            name='OPC',
+            dir='./datasets/OPC',
             n_trials=3,
             batch_size=32,
         ),
-        dict(
-            dir='./datasets/PolyOmics',
-            n_trials=1,
-            batch_size=256,
-        ),
+        # dict(
+        #     name='Gas',
+        #     dir='./datasets/Gas',
+        #     n_trials=3,
+        #     batch_size=32,
+        # ),
     ]
     model_config = dict(
         hidden_dim=512,
@@ -22,8 +36,8 @@ if __name__ == '__main__':
         dict(output_name='polyBERT', encoder_path='polyBERT', input_dim=600),
         dict(output_name='TransPolymer', encoder_path='TransPolymer', input_dim=768),
         dict(output_name='PolyCL', encoder_path='PolyCL', input_dim=600, pooling='cls'),
-        # dict(output_name='MMPolymer', encoder_path='MMPolymer', input_dim=1280, pooling='cls'),
-        # dict(output_name='PerioGT', encoder_path='PerioGT', input_dim=2304),
+        dict(output_name='MMPolymer', encoder_path='MMPolymer', input_dim=1280, pooling='cls'),
+        dict(output_name='PerioGT', encoder_path='PerioGT', input_dim=2304),
         dict(output_name='PoCo', encoder_path='./checkpoints/PoCo/final', input_dim=512),
         dict(output_name='PoCo_concat', encoder_path='./checkpoints/PoCo/final', input_dim=512 * 3, concat_last_layers=3),
     ]
@@ -37,7 +51,7 @@ if __name__ == '__main__':
                 pooling=enc.get('pooling', 'mean'),
                 concat_last_layers=enc.get('concat_last_layers', None),
             )
-            output_name = f"{dataset.name}-new/{enc['output_name']}"
+            output_name = f"{dataset_config['name']}/{enc['output_name']}"
             trainer = MultiTaskTrainer(
                 model_config, dataset,
                 output_dir=f'./checkpoints/{output_name}',

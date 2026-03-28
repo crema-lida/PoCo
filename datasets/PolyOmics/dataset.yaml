@@ -1,4 +1,3 @@
-name: PolyOmics
 data_file: cleaned.csv
 smiles_column: smiles_list
 categories:

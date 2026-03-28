@@ -1,0 +1,13 @@
+data_file: cleaned.csv
+smiles_column: SMILES
+categories:
+  Thermal:
+    - Tg
+    - Tc
+  Thermodynamic & physical:
+    - FFV
+    - Density
+    - Rg
+transforms:
+  log10: []
+  logm1: []

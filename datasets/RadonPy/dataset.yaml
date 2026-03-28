@@ -1,4 +1,3 @@
-name: RadonPy
 data_file: PI1070.csv
 smiles_column: smiles
 categories:

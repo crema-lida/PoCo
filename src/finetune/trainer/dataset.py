@@ -17,7 +17,6 @@ class PolymerDataset:
     def __init__(
         self,
         *,
-        name: str,
         dataset_dir: str,
         data_file: str,
         smiles_column: str,
@@ -32,7 +31,6 @@ class PolymerDataset:
         properties: list[str] | None = None,
         indices: list[int] | np.ndarray | None = None,
     ):
-        self.name = name
         self.dataset_dir = dataset_dir
         self.data_file = data_file
         self.smiles_column = smiles_column
@@ -74,7 +72,6 @@ class PolymerDataset:
         with config_path.open() as f:
             config = yaml.safe_load(f) or {}
 
-        name = config['name']
         data_file = config['data_file']
         smiles_column = config['smiles_column']
         categories = {
@@ -108,7 +105,6 @@ class PolymerDataset:
         print('Done.')
 
         return cls(
-            name=name,
             dataset_dir=str(dataset_path),
             data_file=data_file,
             smiles_column=smiles_column,
@@ -129,7 +125,6 @@ class PolymerDataset:
     ) -> PolymerDataset:
         selected_tasks = self.properties if tasks is None else tasks
         return type(self)(
-            name=self.name,
             dataset_dir=self.dataset_dir,
             data_file=self.data_file,
             smiles_column=self.smiles_column,
@@ -147,7 +142,6 @@ class PolymerDataset:
 
     def to_config_dict(self) -> dict[str, Any]:
         return {
-            'name': self.name,
             'dataset_dir': self.dataset_dir,
             'data_file': self.data_file,
             'smiles_column': self.smiles_column,

@@ -19,7 +19,7 @@ if __name__ == '__main__':
         encoder_path=encoder_path,
         concat_last_layers=3,
     )
-    output_name = f'{dataset.name}/PoCo-final'
+    output_name = 'MTL/PoCo-final'
 
     trainer = MultiTaskTrainer(
         model_config, dataset,
@@ -36,15 +36,14 @@ if __name__ == '__main__':
 
     encoder_dir = './checkpoints/PoCo-10k'
     all_checkpoints = [f'checkpoint-{step}' for step in range(10000, 50001, 10000)]
-
+    output_name = 'MTL/PoCo-10k'
+    
     for checkpoint in all_checkpoints:
         encoder_path = f'{encoder_dir}/{checkpoint}'
         dataset = PolymerDataset.from_dir(
             dataset_dir,
             encoder_path=encoder_path,
         )
-        output_name = f'{dataset.name}/PoCo-10k'
-
         trainer = MultiTaskTrainer(
             model_config, dataset,
             output_dir=f'./checkpoints/{output_name}/{checkpoint}',

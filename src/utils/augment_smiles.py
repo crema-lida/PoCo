@@ -1,6 +1,7 @@
 import random
 import re
 from types import NoneType
+from canonicalize_psmiles.canonicalize import canonicalize as ext_canonicalize
 from psmiles import PolymerSmiles as PS
 from rdkit import Chem
 from rdkit.Chem import rdchem
@@ -11,7 +12,9 @@ BRACKET_STAR = re.compile(r"(\[\*\])")
 
 
 def canonicalize(s):
-    return PS(s).canonicalize.psmiles
+    # `psmiles` re-parses the canonicalized string and can fail if RDKit emits
+    # a mixed `*` / `[*]` representation for some Ge/Sn-containing polymers.
+    return replace_stars(ext_canonicalize(s))
 
 
 def parallel_canonicalize(smiles_list):

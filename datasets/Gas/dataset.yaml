@@ -1,0 +1,26 @@
+data_file: cleaned.csv
+smiles_column: smiles_string
+categories:
+  Permeability:
+    - p_exp_CH4
+    - p_exp_CO2
+    - p_exp_H2
+    - p_exp_He
+    - p_exp_N2
+    - p_exp_O2
+  Diffusivity:
+    - d_exp_CH4
+    - d_exp_CO2
+    - d_exp_H2
+    - d_exp_He
+    - d_exp_N2
+    - d_exp_O2
+  Solubility:
+    - s_sim_CH4
+    - s_sim_CO2
+    - s_sim_N2
+    - s_sim_O2
+
+transforms:
+  log10: []
+  logm1: []

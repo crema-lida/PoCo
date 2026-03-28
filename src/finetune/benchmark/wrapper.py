@@ -33,12 +33,14 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
         case 'polyBERT':
             model = AutoModel.from_pretrained(bench_path, output_hidden_states=True)
             tokenizer = AutoTokenizer.from_pretrained(bench_path)
+            max_length = model.config.max_position_embeddings
 
         case 'TransPolymer':
             from .TransPolymer.PolymerSmilesTokenization import PolymerSmilesTokenizer
 
             model = RobertaModel.from_pretrained(bench_path, output_hidden_states=True)
-            tokenizer = PolymerSmilesTokenizer.from_pretrained('roberta-base')
+            tokenizer = PolymerSmilesTokenizer.from_pretrained('roberta-base', local_files_only=True)
+            max_length = model.config.max_position_embeddings
 
         case 'PolyCL':
             model_config = AutoConfig.from_pretrained(bench_path)
@@ -46,6 +48,7 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
             model = PolyCL(model_config)
             model.load_state_dict(torch.load(bench_path / 'polycl.pth'), strict=False)
             tokenizer = AutoTokenizer.from_pretrained(bench_path)
+            max_length = model.encoder.config.max_position_embeddings
             
         case 'MMPolymer':
             from .MMPolymer.encoder import build_mm_polymer_encoder
@@ -58,6 +61,7 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
         case _:
             model = AutoModel.from_pretrained(encoder_path, output_hidden_states=True)
             tokenizer = AutoTokenizer.from_pretrained(encoder_path)
+            max_length = model.config.max_position_embeddings
     
     model.eval().cuda()
     
@@ -80,7 +84,13 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
         outputs = []
         for i in range(0, len(sentences), batch_size):
             batch = sentences[i:i + batch_size]
-            enc = tokenizer(batch, padding=True, return_tensors='pt')
+            enc = tokenizer(
+                batch,
+                padding=True,
+                truncation=True,
+                max_length=max_length,
+                return_tensors='pt',
+            )
             out = model(**enc.to('cuda'))
 
             if concat_last_layers is not None:
