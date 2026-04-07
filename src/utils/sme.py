@@ -1,12 +1,10 @@
 import numpy as np
 import os
 from concurrent.futures import ProcessPoolExecutor
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 import multiprocessing as mp
-from pathlib import Path
 from typing import Optional
 
-import dask.dataframe as dd
 import pandas as pd
 from scipy.stats import t as student_t
 import torch
@@ -22,6 +20,28 @@ _THREAD_ENV_VARS = (
     "NUMEXPR_NUM_THREADS",
     "VECLIB_MAXIMUM_THREADS",
 )
+
+_OCCURRENCE_COLUMNS = [
+    "sample_idx",
+    "smiles",
+    "fragment",
+    "y_base",
+    "y_sub",
+    "delta",
+    "atom_group",
+]
+
+_STATS_COLUMNS = [
+    "fragment",
+    "n",
+    "mean_delta",
+    "std_delta",
+    "t_stat",
+    "pval",
+    "pval_adj",
+    "neglog10_p",
+    "neglog10_fdr",
+]
 
 
 def collate_pad(examples: list[dict[str, torch.Tensor]], pad_id: int):
@@ -79,26 +99,20 @@ def bh_fdr(pvals: np.ndarray) -> np.ndarray:
     return result
 
 
-def compute_stats_with_dask(
-    occurrence_path: str,
-    stats_save_path: Optional[str] = None,
-    blocksize: Optional[str] = "64MB",
-) -> pd.DataFrame:
-    # Use Dask to aggregate large occurrence files without loading all rows.
-    ddf = dd.read_csv(
-        occurrence_path,
-        blocksize=blocksize,
-        usecols=["fragment", "delta"],
-    ).dropna(subset=["fragment", "delta"])
+def compute_fragment_stats(df_occurrence: pd.DataFrame) -> pd.DataFrame:
+    occ_subset = df_occurrence.loc[:, ["fragment", "delta"]].dropna(subset=["fragment", "delta"])
 
-    agg = ddf.groupby("fragment").agg(
-        n=("delta", "count"),
-        mean_delta=("delta", "mean"),
-        std_delta=("delta", "std"),
+    agg = (
+        occ_subset.groupby("fragment")["delta"]
+        .agg(n="count", mean_delta="mean", std_delta="std")
+        .reset_index()
     )
-    df_stats = agg.reset_index().compute()
+    if agg.empty:
+        return pd.DataFrame(columns=_STATS_COLUMNS)
 
+    df_stats = agg.copy()
     df_stats["n"] = df_stats["n"].astype(int)
+    df_stats["mean_delta"] = df_stats["mean_delta"].astype(float)
     df_stats["std_delta"] = df_stats["std_delta"].astype(float)
 
     df_stats["t_stat"] = np.nan
@@ -107,13 +121,29 @@ def compute_stats_with_dask(
     eligible = (df_stats["n"] > 1) & df_stats["std_delta"].notna()
     if eligible.any():
         subset = df_stats.loc[eligible, ["mean_delta", "std_delta", "n"]]
-        stderr = subset["std_delta"] / np.sqrt(subset["n"])
-        t_stats = subset["mean_delta"] / stderr
-        df_stats.loc[subset.index, "t_stat"] = t_stats
-        df_stats.loc[subset.index, "pval"] = 2.0 * student_t.sf(
-            np.abs(t_stats),
-            df=subset["n"] - 1,
-        )
+
+        nonzero_std = subset["std_delta"] > 0
+        if nonzero_std.any():
+            nonzero = subset.loc[nonzero_std]
+            stderr = nonzero["std_delta"] / np.sqrt(nonzero["n"])
+            t_stats = nonzero["mean_delta"] / stderr
+            df_stats.loc[nonzero.index, "t_stat"] = t_stats.to_numpy()
+            df_stats.loc[nonzero.index, "pval"] = 2.0 * student_t.sf(
+                np.abs(t_stats.to_numpy()),
+                df=nonzero["n"].to_numpy() - 1,
+            )
+
+        zero_std = ~nonzero_std
+        if zero_std.any():
+            zero_var = subset.loc[zero_std]
+            means = zero_var["mean_delta"].to_numpy()
+            zero_mean = np.isclose(means, 0.0)
+            df_stats.loc[zero_var.index, "t_stat"] = np.where(
+                zero_mean,
+                0.0,
+                np.copysign(np.inf, means),
+            )
+            df_stats.loc[zero_var.index, "pval"] = np.where(zero_mean, 1.0, 0.0)
 
     valid = df_stats["pval"].notna()
     df_stats["pval_adj"] = np.nan
@@ -134,17 +164,12 @@ def compute_stats_with_dask(
         np.nan,
     )
 
-    if stats_save_path:
-        stats_path = Path(stats_save_path)
-        stats_path.parent.mkdir(parents=True, exist_ok=True)
-        df_stats.to_csv(stats_save_path, index=False)
-
-    return df_stats
+    return df_stats.loc[:, _STATS_COLUMNS]
 
 
 def _build_gram_fragments(args):
     smiles, tokens, embeds = args
-    result = make_gram_fragments(smiles, tokens, embeds, w_double=1)
+    result = make_gram_fragments(smiles, tokens, embeds)
     frag_ids = result.get("frag_ids", [])
     fragments = result.get("fragments", [])
     atom_groups = result.get("atom_groups", [])
@@ -168,23 +193,28 @@ _FRAGMENT_BUILDERS = {
 
 def _tokenize_chunk(tokenizer, smiles_chunk):
     enc = tokenizer(smiles_chunk, return_token_type_ids=False)
+    input_ids = enc["input_ids"]
+    attention_mask = enc["attention_mask"]
     base_examples = [
-        {k: torch.tensor(v[i]) for k, v in enc.items()}
-        for i in range(len(smiles_chunk))
+        {
+            "input_ids": torch.as_tensor(ids),
+            "attention_mask": torch.as_tensor(mask),
+        }
+        for ids, mask in zip(input_ids, attention_mask)
     ]
-    tokens_all = [tokenizer.convert_ids_to_tokens(ids) for ids in enc["input_ids"]]
+    tokens_all = [tokenizer.convert_ids_to_tokens(ids) for ids in input_ids]
     return base_examples, tokens_all
 
 
 @contextmanager
-def _thread_env_guard(num_workers: int, worker_threads: Optional[int]):
-    if num_workers <= 1 or worker_threads is None:
+def _thread_env_guard(num_workers: int):
+    if num_workers <= 1:
         yield
         return
 
     backup = {name: os.environ.get(name) for name in _THREAD_ENV_VARS}
     for name in _THREAD_ENV_VARS:
-        os.environ[name] = str(worker_threads)
+        os.environ[name] = "1"
     try:
         yield
     finally:
@@ -195,46 +225,71 @@ def _thread_env_guard(num_workers: int, worker_threads: Optional[int]):
                 os.environ[name] = value
 
 
+def _aggregate_occurrences(masked_meta, sub_preds) -> list[dict[str, object]]:
+    aggregated: dict[tuple[int, str], dict[str, object]] = {}
+    for (idx, smiles, frag_label, atom_group, base_pred), sub_pred in zip(
+        masked_meta,
+        sub_preds,
+    ):
+        sub_pred = float(sub_pred)
+        delta = base_pred - sub_pred
+        key = (idx, frag_label)
+        entry = aggregated.get(key)
+        if entry is None:
+            entry = aggregated[key] = {
+                "sample_idx": idx,
+                "smiles": smiles,
+                "fragment": frag_label,
+                "y_base": base_pred,
+                "sum_y_sub": 0.0,
+                "sum_delta": 0.0,
+                "count": 0,
+                "atom_group": atom_group,
+            }
+        entry["sum_y_sub"] = entry["sum_y_sub"] + sub_pred
+        entry["sum_delta"] = entry["sum_delta"] + delta
+        entry["count"] = entry["count"] + 1
+
+    return [
+        {
+            "sample_idx": entry["sample_idx"],
+            "smiles": entry["smiles"],
+            "fragment": entry["fragment"],
+            "y_base": entry["y_base"],
+            "y_sub": entry["sum_y_sub"] / entry["count"],
+            "delta": entry["sum_delta"] / entry["count"],
+            "atom_group": str(entry["atom_group"]),
+        }
+        for entry in aggregated.values()
+    ]
+
+
 def run_sme(
-    dataset: list[str],
+    smiles_list: list[str],
     tokenizer,
     model,
     method: str = "gram",
     batch_size: int = 64,
     device: Optional[str] = None,
     chunk_size: int = 512,
-    flush_every: int = 50_000,
-    occ_save_path: Optional[str] = None,
-    stats_save_path: Optional[str] = None,
-    stats_blocksize: Optional[str] = "64MB",
-    num_workers: Optional[int] = None,
-    worker_threads: Optional[int] = None,
-) -> tuple[None, pd.DataFrame]:
+    num_workers: Optional[int] = 1,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Run substructure masking, stream occurrences to disk, and compute statistics with Dask.
+    Run substructure masking and compute fragment statistics fully in memory with pandas.
 
     Args:
-        dataset: List of SMILES strings.
+        smiles_list: List of SMILES strings.
         tokenizer: Hugging Face tokenizer.
         model: Predictive model returning scalar outputs.
         batch_size: Forward-pass batch size.
         device: Torch device (auto-detects when None).
         chunk_size: Number of molecules processed per iteration.
-        flush_every: Buffer size before flushing occurrence rows to disk.
-        occ_save_path: CSV path for per-occurrence rows.
-        stats_save_path: CSV path for aggregated fragment statistics.
-        stats_blocksize: Dask blocksize when reading occurrences for aggregation.
         num_workers: Worker processes for fragment/mask building per chunk. Use <=1 to disable.
             When None, uses max(1, cpu_count - 1).
-        worker_threads: Threads per worker process for BLAS/OpenMP libs. Defaults to 1
-            when num_workers > 1.
 
     Returns:
-        (None, df_stats): occurrence rows stored on disk, df_stats as pandas DataFrame.
+        A tuple of aggregated fragment statistics and per-occurrence rows.
     """
-    if occ_save_path is None:
-        raise ValueError("occ_save_path must be provided to persist occurrence results.")
-    
     method = method.lower()
     frag_builder = _FRAGMENT_BUILDERS.get(method)
     if frag_builder is None:
@@ -248,39 +303,23 @@ def run_sme(
 
     pad_id = tokenizer.pad_token_id
 
-    occ_path = Path(occ_save_path)
-    occ_path.parent.mkdir(parents=True, exist_ok=True)
-    if occ_path.exists():
-        occ_path.unlink()
-
-    occ_buffer: list[dict[str, object]] = []
-
-    def flush_occurrence_buffer():
-        if not occ_buffer:
-            return
-        df = pd.DataFrame(occ_buffer)
-        mode = "a"
-        write_header = not occ_path.exists()
-        # Stream results to disk to cap memory while preserving file format.
-        df.to_csv(occ_save_path, index=False, header=write_header, mode=mode)
-        occ_buffer.clear()
+    occurrence_rows: list[dict[str, object]] = []
 
     if num_workers is None:
         num_workers = max(1, (os.cpu_count() or 1) - 1)
 
-    if num_workers > 1 and worker_threads is None:
-        worker_threads = 1
-
-    with _thread_env_guard(num_workers, worker_threads):
-        executor = None
-        if num_workers > 1:
-            executor = ProcessPoolExecutor(
+    with _thread_env_guard(num_workers):
+        executor_cm = (
+            ProcessPoolExecutor(
                 max_workers=num_workers,
                 mp_context=mp.get_context("spawn"),
             )
-        try:
-            for chunk_start in tqdm(range(0, len(dataset), chunk_size), desc="SME chunks"):
-                smiles_chunk = dataset[chunk_start:chunk_start + chunk_size]
+            if num_workers > 1
+            else nullcontext()
+        )
+        with executor_cm as executor:
+            for chunk_start in tqdm(range(0, len(smiles_list), chunk_size), desc="SME chunks"):
+                smiles_chunk = smiles_list[chunk_start:chunk_start + chunk_size]
 
                 base_examples, tokens_all = _tokenize_chunk(tokenizer, smiles_chunk)
                 embeds_all = (
@@ -328,59 +367,9 @@ def run_sme(
                     continue
 
                 sub_preds = predict(model, masked_examples, pad_id, batch_size, device)
+                occurrence_rows.extend(_aggregate_occurrences(masked_meta, sub_preds))
 
-                # Aggregate repeated fragments within the same molecule.
-                aggregated: dict[tuple[int, str], dict[str, object]] = {}
-                for (idx, smiles, frag_label, atom_group, base_pred), sub_pred in zip(
-                    masked_meta,
-                    sub_preds,
-                ):
-                    sub_pred = float(sub_pred)
-                    delta = base_pred - sub_pred
-                    key = (idx, frag_label)
-                    entry = aggregated.get(key)
-                    if entry is None:
-                        aggregated[key] = {
-                            "sample_idx": idx,
-                            "smiles": smiles,
-                            "fragment": frag_label,
-                            "y_base": base_pred,
-                            "sum_y_sub": sub_pred,
-                            "sum_delta": delta,
-                            "count": 1,
-                            "atom_group": atom_group,
-                        }
-                    else:
-                        entry["sum_y_sub"] = entry["sum_y_sub"] + sub_pred
-                        entry["sum_delta"] = entry["sum_delta"] + delta
-                        entry["count"] = entry["count"] + 1
+    df_occurrence = pd.DataFrame(occurrence_rows, columns=_OCCURRENCE_COLUMNS)
+    df_stats = compute_fragment_stats(df_occurrence)
 
-                for entry in aggregated.values():
-                    count = entry["count"]
-                    occ_buffer.append(
-                        {
-                            "sample_idx": entry["sample_idx"],
-                            "smiles": entry["smiles"],
-                            "fragment": entry["fragment"],
-                            "y_base": entry["y_base"],
-                            "y_sub": entry["sum_y_sub"] / count,
-                            "delta": entry["sum_delta"] / count,
-                            "atom_group": str(entry["atom_group"]),
-                        }
-                    )
-
-                if len(occ_buffer) >= flush_every:
-                    flush_occurrence_buffer()
-
-            flush_occurrence_buffer()
-        finally:
-            if executor is not None:
-                executor.shutdown(wait=True)
-
-    df_stats = compute_stats_with_dask(
-        occurrence_path=occ_save_path,
-        stats_save_path=stats_save_path,
-        blocksize=stats_blocksize,
-    )
-
-    return None, df_stats
+    return df_stats, df_occurrence

@@ -1,4 +1,3 @@
-dask
 numpy
 scipy
 pandas

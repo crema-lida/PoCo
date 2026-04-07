@@ -1,35 +1,29 @@
 from trainer import MultiTaskTrainer, PolymerDataset
 
 if __name__ == '__main__':
-    import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
-
-    dataset_dir = './datasets/MTL_Khazana'
-    # dataset_dir = './datasets/PolyOmics'
     model_config = dict(
-        input_dim=512 * 3,
+        input_dim=512,
         hidden_dim=512,
         num_hidden_layers=1,
         dropout=0.2,
     )
 
     encoder_path = './checkpoints/PoCo/final'
+    output_name = 'PolyOmics/PoCo'
     dataset = PolymerDataset.from_dir(
-        dataset_dir,
+        dataset_dir='./datasets/PolyOmics',
         encoder_path=encoder_path,
-        concat_last_layers=3,
     )
-    output_name = 'MTL/PoCo-final'
 
     trainer = MultiTaskTrainer(
         model_config, dataset,
         output_dir=f'./checkpoints/{output_name}',
         logging_dir=f'./runs/{output_name}',
         n_folds=5,
-        n_trials=3,
+        n_trials=1,
         max_epochs=200,
         learning_rate=0.001,
-        train_batch_size=32,
+        train_batch_size=256,
     )
     trainer.train()
     exit()
@@ -41,7 +35,7 @@ if __name__ == '__main__':
     for checkpoint in all_checkpoints:
         encoder_path = f'{encoder_dir}/{checkpoint}'
         dataset = PolymerDataset.from_dir(
-            dataset_dir,
+            dataset_dir='./datasets/MTL_Khazana',
             encoder_path=encoder_path,
         )
         trainer = MultiTaskTrainer(

@@ -3,29 +3,17 @@ from trainer import MultiTaskTrainer, PolymerDataset
 if __name__ == '__main__':
     datasets = [
         # dict(
-        #     name='MTL',
-        #     dir='./datasets/MTL_Khazana',
-        #     n_trials=3,
-        #     batch_size=32,
-        # ),
-        # dict(
         #     name='PolyOmics',
         #     dir='./datasets/PolyOmics',
         #     n_trials=1,
         #     batch_size=256,
         # ),
         dict(
-            name='OPC',
-            dir='./datasets/OPC',
+            name='RadonPy',
+            dir='./datasets/RadonPy',
             n_trials=3,
             batch_size=32,
         ),
-        # dict(
-        #     name='Gas',
-        #     dir='./datasets/Gas',
-        #     n_trials=3,
-        #     batch_size=32,
-        # ),
     ]
     model_config = dict(
         hidden_dim=512,

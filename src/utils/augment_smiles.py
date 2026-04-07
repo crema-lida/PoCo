@@ -12,7 +12,7 @@ BRACKET_STAR = re.compile(r"(\[\*\])")
 
 
 def canonicalize(s):
-    # `psmiles` re-parses the canonicalized string and can fail if RDKit emits
+    # `PolymerSmiles.canonicalize` re-parses the canonicalized string and can fail if RDKit emits
     # a mixed `*` / `[*]` representation for some Ge/Sn-containing polymers.
     return replace_stars(ext_canonicalize(s))
 

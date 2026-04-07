@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .devcontainer/
 .vscode/
+.codex
 
 # runtime outputs
 /figures/
