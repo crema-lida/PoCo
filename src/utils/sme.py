@@ -225,15 +225,18 @@ def _thread_env_guard(num_workers: int):
                 os.environ[name] = value
 
 
-def _aggregate_occurrences(masked_meta, sub_preds) -> list[dict[str, object]]:
-    aggregated: dict[tuple[int, str], dict[str, object]] = {}
-    for (idx, smiles, frag_label, atom_group, base_pred), sub_pred in zip(
-        masked_meta,
-        sub_preds,
+def _aggregate_occurrences(
+    masked_meta,
+    sub_preds,
+    intra_mol_mean: bool = True,
+) -> list[dict[str, object]]:
+    aggregated: dict[tuple[object, ...], dict[str, object]] = {}
+    for occ_idx, ((idx, smiles, frag_label, atom_group, base_pred), sub_pred) in enumerate(
+        zip(masked_meta, sub_preds)
     ):
         sub_pred = float(sub_pred)
         delta = base_pred - sub_pred
-        key = (idx, frag_label)
+        key = (idx, frag_label) if intra_mol_mean else (idx, frag_label, occ_idx)
         entry = aggregated.get(key)
         if entry is None:
             entry = aggregated[key] = {
@@ -273,7 +276,9 @@ def run_sme(
     device: Optional[str] = None,
     chunk_size: int = 512,
     num_workers: Optional[int] = 1,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    intra_mol_mean: bool = True,
+    return_stats: bool = True,
+) -> tuple[pd.DataFrame, Optional[pd.DataFrame]]:
     """
     Run substructure masking and compute fragment statistics fully in memory with pandas.
 
@@ -284,11 +289,14 @@ def run_sme(
         batch_size: Forward-pass batch size.
         device: Torch device (auto-detects when None).
         chunk_size: Number of molecules processed per iteration.
-        num_workers: Worker processes for fragment/mask building per chunk. Use <=1 to disable.
+        num_workers: Worker processes for fragment/mask building per chunk. Use <= 1 to disable.
             When None, uses max(1, cpu_count - 1).
+        intra_mol_mean: Whether to average repeated occurrences of the same fragment within
+            one molecule.
+        return_stats: Whether to compute and return df_stats.
 
     Returns:
-        A tuple of aggregated fragment statistics and per-occurrence rows.
+        (df_occurrence, df_stats or None)
     """
     method = method.lower()
     frag_builder = _FRAGMENT_BUILDERS.get(method)
@@ -367,9 +375,15 @@ def run_sme(
                     continue
 
                 sub_preds = predict(model, masked_examples, pad_id, batch_size, device)
-                occurrence_rows.extend(_aggregate_occurrences(masked_meta, sub_preds))
+                occurrence_rows.extend(
+                    _aggregate_occurrences(
+                        masked_meta,
+                        sub_preds,
+                        intra_mol_mean=intra_mol_mean,
+                    )
+                )
 
     df_occurrence = pd.DataFrame(occurrence_rows, columns=_OCCURRENCE_COLUMNS)
-    df_stats = compute_fragment_stats(df_occurrence)
+    df_stats = compute_fragment_stats(df_occurrence) if return_stats else None
 
-    return df_stats, df_occurrence
+    return df_occurrence, df_stats

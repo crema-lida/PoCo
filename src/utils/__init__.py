@@ -3,4 +3,4 @@ from .brics_masking import make_brics_fragments
 from .gram_masking import make_gram_fragments
 from .sme import run_sme
 from .utils import parallel_apply
-from .augment_smiles import parallel_canonicalize
+from .augment_smiles import canonicalize, parallel_canonicalize

@@ -103,7 +103,7 @@ class MMPolymerModel(BaseUnicoreModel):
         self._num_updates = None
         
         # 1D net
-        self.tokenizer = PolymerSmilesTokenizer.from_pretrained("roberta-base", max_len=411)
+        self.tokenizer = PolymerSmilesTokenizer.from_pretrained("roberta-base", max_len=411, local_files_only=True)
         config_dir = Path(__file__).resolve().parent / "config"
         self.config = AutoConfig.from_pretrained(str(config_dir))
         self.PretrainedModel = RobertaModel(config=self.config)
