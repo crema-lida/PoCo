@@ -12,6 +12,8 @@ __pycache__/
 
 # experimental
 src/pretrain/trainer_lejepa.py
+src/pretrain/pretrain_mlm.py
+pretrain_mlm.sh
 
 # data files
 /_papers-repos/
