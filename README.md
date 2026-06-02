@@ -55,6 +55,6 @@ If you use PoCo in your research, please cite our paper:
   author = {Wang, Lida and Long, Donghui},
   journal = {ChemRxiv},
   year = {2026},
-  doi = {10.26434/chemrxiv.15003645.v1}
+  doi = {10.26434/chemrxiv.15003645/v1}
 }
 ```
