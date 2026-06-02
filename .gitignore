@@ -6,7 +6,6 @@ __pycache__/
 .codex
 
 # runtime outputs
-/figures/
 /runs/
 /checkpoints/
 
@@ -28,3 +27,9 @@ pretrain_mlm.sh
 *.bin
 *.pkl
 *.csv
+
+# visualizations
+/figures/*
+!/figures/style.mplstyle
+!/figures/inference.py
+!/figures/sme_mol.ipynb

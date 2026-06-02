@@ -1,3 +1,5 @@
+# Raw data: https://www.kaggle.com/competitions/neurips-open-polymer-prediction-2025
+# To use this dataset, download the raw data and run clean.ipynb in this directory.
 data_file: cleaned.csv
 smiles_column: SMILES
 categories:

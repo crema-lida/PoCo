@@ -1,3 +1,5 @@
+# Raw data: https://github.com/Ramprasad-Group/polyVERSE/blob/main/Other/Gas_permeability_solubility_diffusivity/Gas_permeability_solubility_diffusivity_wide.csv
+# To use this dataset, download the raw data and run clean.ipynb in this directory.
 data_file: cleaned.csv
 smiles_column: smiles_string
 categories:

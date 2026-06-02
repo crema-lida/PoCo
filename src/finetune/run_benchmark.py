@@ -13,7 +13,7 @@ if __name__ == '__main__':
             dir='./datasets/RadonPy',
             n_trials=3,
             batch_size=32,
-        ),
+        ),  # We used the same n_trials and batch_size for MTL, OPC and Gas datasets.
     ]
     model_config = dict(
         hidden_dim=512,

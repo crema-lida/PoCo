@@ -1,3 +1,6 @@
+# Raw data: https://khazana.gatech.edu/download/2021_Patterns_Chris/MTL_Khazana.zip
+# To use this dataset, convert the raw data into a pivot table first.
+# Save the result as pivot_table.csv, matching data_file below.
 data_file: pivot_table.csv
 smiles_column: smiles
 categories:

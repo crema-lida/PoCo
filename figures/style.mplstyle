@@ -1,0 +1,9 @@
+font.family: DejaVu Sans
+mathtext.fontset: dejavusans
+pdf.fonttype: 42
+svg.fonttype: none
+font.size: 8
+axes.titlesize: 8
+xtick.labelsize: 7.5
+ytick.labelsize: 7.5
+savefig.dpi: 300

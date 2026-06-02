@@ -1,3 +1,5 @@
+# Raw data: https://github.com/RadonPy/RadonPy/tree/develop/data
+# To use this dataset, use the source PI1070.csv as data_file; no clean.ipynb is provided here.
 data_file: PI1070.csv
 smiles_column: smiles
 categories:

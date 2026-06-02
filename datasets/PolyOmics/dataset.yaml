@@ -1,3 +1,5 @@
+# Raw data: https://huggingface.co/datasets/yhayashi1986/PolyOmics
+# To use this dataset, download the raw data and run clean.ipynb in this directory.
 data_file: cleaned.csv
 smiles_column: smiles_list
 categories:
