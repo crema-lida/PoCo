@@ -2,7 +2,7 @@
 
 ## Overview
 
-PoCo is a contrastive learning framework for learning polymer representations for property prediction and interpretability analysis. This repository provides the source code for PoCo. For method details, please see our paper: [Contrastive representation learning for polymer informatics](https://doi.org/10.26434/chemrxiv.15003645/v1).
+PoCo is a contrastive learning framework for polymer representation learning, with applications to property prediction and interpretability. This repository contains the source code for PoCo. For more details, please see our paper: [Contrastive representation learning for polymer informatics](https://doi.org/10.26434/chemrxiv.15003645/v1).
 
 <p align="center">
   <img width="80%" alt="poco-overview" src="https://github.com/user-attachments/assets/fb984d8a-4861-4d4d-bb6d-c382288aa9ce" />
@@ -18,8 +18,8 @@ pip install -r requirements.txt
 
 ## Pretraining
 
-1. PoCo is pretrained on ~1M polymer SMILES in the [PI1M dataset](https://github.com/RUIMINMA1996/PI1M). The raw dataset contains some invalid SMILES; make sure to clean the dataset with `src/pretrain/preprocess.py`.
-2. Use `src/pretrain/train_tokenizer.py` to generate a tokenizer.
+1. PoCo was pretrained on ~1M polymer SMILES from the [PI1M dataset](https://github.com/RUIMINMA1996/PI1M). The raw dataset contains invalid SMILES; please clean it with `src/pretrain/preprocess.py` before pretraining.
+2. Use `src/pretrain/train_tokenizer.py` to train a tokenizer.
 3. Run the pretraining script `./pretrain.sh`.
 
 We provide pretrained PoCo weights at https://huggingface.co/CremaX/PoCo.
@@ -27,6 +27,8 @@ We provide pretrained PoCo weights at https://huggingface.co/CremaX/PoCo.
 ## Transfer learning
 
 The training entry point for downstream tasks is `src/finetune/finetune.py`.
+
+Use `src/finetune/run_benchmark.py` to reproduce the benchmark results. The adaptation code for the baseline models largely follows the original implementations. When running the benchmarks, additional dependencies or minor code modifications may be required to accommodate different local environments.
 
 ## Benchmark results
 
