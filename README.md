@@ -44,3 +44,17 @@ Use `src/finetune/run_benchmark.py` to reproduce the benchmark results. The adap
 
 <sup>a</sup> Number of parameters in millions.  
 <sup>b</sup> Representation dimension.
+
+## Citation
+
+If you use PoCo in your research, please cite our paper:
+
+```bibtex
+@article{wang2026poco,
+  title = {Contrastive representation learning for polymer informatics},
+  author = {Wang, Lida and Long, Donghui},
+  journal = {ChemRxiv},
+  year = {2026},
+  doi = {10.26434/chemrxiv.15003645.v1}
+}
+```
