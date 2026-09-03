@@ -1,0 +1,31 @@
+[project]
+name = "poco"
+version = "0.1.0"
+description = "Contrastive representation learning for polymer informatics"
+requires-python = ">=3.12"
+dependencies = [
+    "accelerate>=1.13.0",
+    "datasets>=4.8.5",
+    "matplotlib>=3.10.8",
+    "numpy>=1.26.4",
+    "openpyxl>=3.1.5",
+    "pandas>=3.0.2",
+    "psmiles @ git+https://github.com/FermiQ/psmiles.git",
+    "pyyaml>=6.0.3",
+    "rdkit>=2025.3.6",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.17.1",
+    "sentence-transformers>=5.4.1",
+    "sentencepiece>=0.2.1",
+    "tensorboard>=2.20.0",
+    "torch>=2.8.0",
+    "transformers>=4.57.6",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu129"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch" }

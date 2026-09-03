@@ -51,7 +51,7 @@ class PolymerDataset:
 
         self.row_indices = view.index.to_numpy(copy=True)
         self.fingerprints = self.embeddings[self.row_indices]
-        self.values = view.to_numpy()
+        self.values = view.to_numpy(copy=True)
         self.log10_idx = np.array([name in self.log10_col for name in self.properties], dtype=bool)
         self.logm1_idx = np.array([name in self.logm1_col for name in self.properties], dtype=bool)
 

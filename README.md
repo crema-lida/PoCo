@@ -10,10 +10,16 @@ PoCo is a contrastive learning framework for polymer representation learning, wi
 
 ## Environment setup
 
-Install a PyTorch build that matches your local CUDA environment, then install the dependencies:
+Reproduce this work with [uv](https://docs.astral.sh/uv/), which automatically creates a `.venv` virtual environment:
 
 ```bash
-pip install -r requirements.txt
+uv sync --frozen
+```
+
+To use a different PyTorch source, change `url` under `[[tool.uv.index]]` in `pyproject.toml`, then run:
+
+```bash
+uv sync
 ```
 
 ## Pretraining

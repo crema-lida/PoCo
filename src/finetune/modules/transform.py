@@ -14,7 +14,7 @@ class Transform(nn.Module):
             self.log10_idx = nn.Buffer(torch.zeros(num_features, dtype=torch.bool))
             self.logm1_idx = nn.Buffer(torch.zeros(num_features, dtype=torch.bool))
         else:            
-            data = torch.as_tensor(data, dtype=float64).clone()
+            data = torch.as_tensor(np.array(data, copy=True), dtype=float64)
             if log10_idx is None:
                 log10_idx = torch.zeros(data.shape[-1], dtype=torch.bool)
             if logm1_idx is None:
