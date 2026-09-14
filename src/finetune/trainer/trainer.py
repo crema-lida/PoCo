@@ -1,59 +1,58 @@
 from dataclasses import dataclass
 import json
 import os
+from pathlib import Path
 import random
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, train_test_split
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from modules import MultiTaskGroup, MLP, MultiTaskModel, MMoEModel, Transform
+from modules import MLP, Transform
 from .dataset import PolymerDataset
 from .evaluate import evaluate
-from .scheduler import PlateauRewindLR
+from .splits import (
+    build_manifest,
+    canonical_group_ids,
+    load_manifest,
+    save_manifest,
+    splits_from_manifest,
+    validate_manifest,
+)
 from .train import train
 
 
 @dataclass
 class MultiTaskTrainer:
-    model_config: dict | None = None
-    dataset: PolymerDataset | None = None
+    model_config: dict
+    dataset: PolymerDataset
+    experiment_name: str
     tasks: list[str] | None = None
-    serial: bool = True
     output_dir: str = './checkpoints'
     logging_dir: str | None = None
-    pretrained_dir: str | None = None
-    freeze_shared_layers: bool = False
     device: str = 'cuda'
-    n_folds: int = 1
+    n_folds: int = 5
     n_trials: int = 1
     seed: int = 42
     max_epochs: int = 1
+    min_steps: int = 50
+    early_stopping_patience: int = 50
     learning_rate: float = 1e-3
     weight_decay: float = 0
     train_batch_size: int = 64
     eval_batch_size: int = 1024
-    eval_size: int | float = 0.1
+    inner_validation_size: float = 0.2
+    resume: bool = True
     num_workers: int = 0
     drop_last: bool = False
 
     def __post_init__(self):
-        if self.pretrained_dir is not None:
-            with open(os.path.join(self.pretrained_dir, 'config.json')) as f:
-                pretrained_config = json.load(f)
-                self.model_config = pretrained_config['model_config']
-
-        if self.dataset is None:
-            raise ValueError('dataset must be provided')
-
         self.tasks = self.dataset.normalize_tasks(self.tasks)
-        self._train_impl = self._train_kfold if self.n_folds > 1 else self._train_full
-
+        self.results_dir = Path(self.output_dir) / 'results' / self.experiment_name
         self.writer: SummaryWriter | None = None
-        self.results = {metric: {prop: [] for prop in self.tasks} for metric in ['R2', 'MAE']}
+        self.fold_records: list[dict] = []
 
     def get_config(self) -> dict:
         return {
@@ -61,80 +60,111 @@ class MultiTaskTrainer:
             'dataset': self.dataset.to_config_dict(),
             'tasks': self.tasks,
             'trainer_config': {
-                'serial': self.serial,
                 'output_dir': self.output_dir,
+                'experiment_name': self.experiment_name,
                 'logging_dir': self.logging_dir,
-                'pretrained_dir': self.pretrained_dir,
-                'freeze_shared_layers': self.freeze_shared_layers,
                 'device': self.device,
                 'n_folds': self.n_folds,
                 'n_trials': self.n_trials,
                 'seed': self.seed,
                 'max_epochs': self.max_epochs,
+                'min_steps': self.min_steps,
+                'early_stopping_patience': self.early_stopping_patience,
                 'learning_rate': self.learning_rate,
                 'weight_decay': self.weight_decay,
                 'train_batch_size': self.train_batch_size,
                 'eval_batch_size': self.eval_batch_size,
-                'eval_size': self.eval_size,
+                'inner_validation_size': self.inner_validation_size,
+                'resume': self.resume,
                 'num_workers': self.num_workers,
                 'drop_last': self.drop_last,
             },
         }
 
     def save_checkpoint(self, filepath, model, transform):
-        torch.save({
+        checkpoint = {
             'model': model.state_dict(),
             'transform': transform.state_dict(),
-        }, filepath)
+        }
+        temporary_path = f'{filepath}.tmp'
+        torch.save(checkpoint, temporary_path)
+        os.replace(temporary_path, filepath)
 
-    def get_pretrained_model(self, path, num_tasks: int | None = None):
-        checkpoint = torch.load(path)
-        num_tasks = len(self.tasks) if num_tasks is None else num_tasks
-        model = self.get_model(num_tasks, checkpoint['model'])
-        transform = Transform(num_features=num_tasks).to(self.device)
-        transform.load_state_dict(checkpoint['transform'])
-        return model, transform
+    @staticmethod
+    def _resume_settings(config: dict) -> dict:
+        return {
+            'model': config['model_config'],
+            'dataset': {key: config['dataset'][key] for key in (
+                'dataset_dir', 'data_file', 'smiles_column', 'transforms',
+            )},
+            'encoder': {key: config['dataset']['encoder'][key] for key in (
+                'path', 'pooling', 'concat_last_layers',
+            )},
+            'training': {key: config['trainer_config'][key] for key in (
+                'n_folds', 'n_trials', 'seed', 'max_epochs', 'min_steps', 'early_stopping_patience',
+                'learning_rate', 'weight_decay', 'train_batch_size',
+                'inner_validation_size', 'drop_last',
+            )},
+        }
 
-    def get_model(self, num_tasks: int, state_dict=None):
-        config = self.model_config.copy()
-        model_type = config.pop('model_type', 'ST')
+    @staticmethod
+    def seed_everything(seed: int):
+        random.seed(seed)
+        np.random.seed(seed % (2 ** 32))
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
 
-        match model_type:
-            case 'ST':
-                if num_tasks > 1:
-                    model = MultiTaskGroup()
-                    for _ in range(num_tasks):
-                        model.models.append(MLP(**config))
-                else:
-                    model = MLP(**config)
-            case 'MT':
-                model = MultiTaskModel(num_tasks=num_tasks, **config)
-                if self.freeze_shared_layers:
-                    model.shared.requires_grad_(False)
-            case 'MMoE':
-                model = MMoEModel(num_tasks=num_tasks, **config)
-                if self.freeze_shared_layers:
-                    model.mmoe.experts.requires_grad_(False)
-            case _:
-                raise ValueError(f'Unknown model: {model_type}')
+    @staticmethod
+    def _fold_artifact_paths(task_dir: Path, repeat: int, fold: int) -> dict[str, Path]:
+        name = f'fold-{repeat}.{fold}'
+        return {
+            'checkpoint': task_dir / f'{name}.pth',
+            'metrics': task_dir / f'{name}.json',
+            'predictions': task_dir / f'{name}.predictions.csv.gz',
+        }
 
-        if state_dict:
-            model.load_state_dict(state_dict, strict=False)
+    def _load_completed_fold(self, paths: dict[str, Path]) -> bool:
+        if not all(path.is_file() for path in paths.values()):
+            return False
+        with paths['metrics'].open(encoding='utf-8') as file:
+            record = json.load(file)
+        self.fold_records.append(record)
+        return True
 
-        return model.to(self.device)
+    def _save_fold_artifacts(
+        self,
+        paths: dict[str, Path],
+        model,
+        transform,
+        fold_record: dict,
+        predictions: pd.DataFrame,
+    ):
+        paths['checkpoint'].parent.mkdir(parents=True, exist_ok=True)
+        prediction_tmp = paths['predictions'].with_name(f"{paths['predictions'].name}.tmp")
+        predictions.to_csv(prediction_tmp, index=False, compression='gzip')
+        os.replace(prediction_tmp, paths['predictions'])
+        self.save_checkpoint(paths['checkpoint'], model, transform)
+        # Written last: this record marks a completed fold.
+        metrics_tmp = paths['metrics'].with_name(f"{paths['metrics'].name}.tmp")
+        with metrics_tmp.open('w', encoding='utf-8') as file:
+            json.dump(fold_record, file, indent=2)
+        os.replace(metrics_tmp, paths['metrics'])
 
-    def get_training_modules(self, data_loader):
-        if self.pretrained_dir:
-            checkpoint = torch.load(f'{self.pretrained_dir}/full.pth')
-            state_dict = {
-                k: v for k, v in checkpoint['model'].items()
-                if 'experts' in k or 'shared' in k
-            }
-        else:
-            state_dict = None
+    def _save_fold_table(self):
+        if not self.fold_records:
+            return
+        table = pd.DataFrame(self.fold_records).sort_values(['task', 'repeat', 'fold'])
+        path = self.results_dir / 'fold_metrics.csv'
+        temporary_path = path.with_name(f'{path.name}.tmp')
+        table.to_csv(temporary_path, index=False)
+        os.replace(temporary_path, path)
 
-        dataset = data_loader.dataset
-        model = self.get_model(len(dataset.properties), state_dict)
+    def get_training_modules(self, dataset: PolymerDataset, seed: int):
+        self.seed_everything(seed)
+        model = MLP(**self.model_config).to(self.device)
         transform = Transform(dataset.values, dataset.log10_idx, dataset.logm1_idx).to(self.device)
 
         decayed, no_decay = [], []
@@ -145,15 +175,16 @@ class MultiTaskTrainer:
             {'params': decayed, 'weight_decay': self.weight_decay},
             {'params': no_decay, 'weight_decay': 0.0},
         ], lr=self.learning_rate)
-        scheduler = PlateauRewindLR(model, optimizer, mode='max', patience=50, max_reductions=0)
-        return model, transform, optimizer, scheduler
+        return model, transform, optimizer
 
-    def get_train_loader(self, dataset: PolymerDataset):
+    def get_train_loader(self, dataset: PolymerDataset, seed: int):
+        generator = torch.Generator()
+        generator.manual_seed(seed)
         return DataLoader(
             dataset,
             batch_size=self.train_batch_size,
             shuffle=True,
-            generator=torch.manual_seed(self.seed),
+            generator=generator,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
             drop_last=self.drop_last,
@@ -167,82 +198,151 @@ class MultiTaskTrainer:
             persistent_workers=self.num_workers > 0,
         )
 
-    def add_results(self, properties: list[str], r2, mae):
-        for i, task in enumerate(properties):
-            self.results['R2'][task].append(r2[i])
-            self.results['MAE'][task].append(mae[i])
-
-    def save_results(self, path):
-        df1 = pd.DataFrame(self.results['R2'])
-        df2 = pd.DataFrame(self.results['MAE'])
+    def print_summary(self):
+        records = pd.DataFrame(self.fold_records)
+        scores = records.pivot(index=['repeat', 'fold'], columns='task', values='R2')[self.tasks]
         category_means = []
         for props in self.dataset.categories.values():
-            props = [prop for prop in props if prop in df1.columns]
+            props = [prop for prop in props if prop in scores.columns]
             if props:
-                category_means.append(df1[props].mean(axis=1))
+                category_means.append(scores[props].mean(axis=1))
         if category_means:
             overall = pd.concat(category_means, axis=1).mean(axis=1)
         else:
-            overall = df1.values.mean(axis=1)
-        df1['Overall'] = overall
-        df1.set_index('Overall', inplace=True)
-        with pd.ExcelWriter(path) as writer:
-            df1.to_excel(writer, sheet_name='R2')
-            df2.to_excel(writer, sheet_name='MAE', index=False)
+            overall = scores.values.mean(axis=1)
 
         ddof = 1 if len(overall) > 1 else 0
         mean, std = np.mean(overall), np.std(overall, ddof=ddof)
-        print(f'Average R2: {mean:.3f}±{std:.3f}\n'
-              f'Results saved to {path}')
+        print(f'Average R2: {mean:.3f}±{std:.3f}')
 
-    def _train_kfold(self, output_dir: str, tasks: list[str]):
-        random.seed(self.seed)
-        seeds = random.sample(range(1000), self.n_trials)
-        base_dataset = self.dataset.subset(tasks=tasks)
-        train_indices = list(range(len(base_dataset)))
+    def _train_kfold(self, task_dir: Path, task: str):
+        base_dataset = self.dataset.subset(tasks=[task])
+        manifest_path = Path(self.output_dir) / 'splits' / f'{task}.json.gz'
+        if manifest_path.is_file():
+            manifest = load_manifest(manifest_path)
+            validate_manifest(
+                manifest,
+                base_dataset,
+                n_folds=self.n_folds,
+                n_trials=self.n_trials,
+                seed=self.seed,
+                inner_validation_size=self.inner_validation_size,
+            )
+        else:
+            manifest = build_manifest(
+                base_dataset,
+                n_folds=self.n_folds,
+                n_trials=self.n_trials,
+                seed=self.seed,
+                inner_validation_size=self.inner_validation_size,
+            )
+            save_manifest(manifest_path, manifest)
+        for split in splits_from_manifest(manifest, base_dataset):
+            artifact_paths = self._fold_artifact_paths(task_dir, split.repeat, split.fold)
+            if self.resume and self._load_completed_fold(artifact_paths):
+                print(f'Fold {split.repeat}-{split.fold}: loaded completed result')
+                continue
 
-        for trial, seed in enumerate(seeds, start=1):
-            kfold = KFold(n_splits=self.n_folds, shuffle=True, random_state=seed)
+            artifact_paths['metrics'].unlink(missing_ok=True)
+            (self.results_dir / 'fold_metrics.csv').unlink(missing_ok=True)
+            print(f'Fold {split.repeat}-{split.fold}')
+            inner_train_dataset = base_dataset.subset(indices=split.inner_train_idx)
+            validation_dataset = base_dataset.subset(indices=split.validation_idx)
+            model, inner_transform, optimizer = self.get_training_modules(
+                inner_train_dataset,
+                split.model_seed,
+            )
+            inner_train_loader = self.get_train_loader(inner_train_dataset, split.model_seed)
+            validation_loader = self.get_eval_loader(validation_dataset)
+            last_epoch = (
+                ((split.repeat - 1) * self.n_folds + split.fold - 1) * self.max_epochs
+            )
+            selected_epoch, best_validation_r2 = train(
+                model,
+                inner_train_loader,
+                inner_transform,
+                optimizer,
+                self.max_epochs,
+                last_epoch=last_epoch,
+                writer=self.writer,
+                eval_loader=validation_loader,
+                patience=self.early_stopping_patience,
+                min_steps=self.min_steps,
+            )
+            del model, inner_transform, optimizer
 
-            for fold, (train_idx, val_idx) in enumerate(kfold.split(train_indices), start=1):
-                train_dataset = base_dataset.subset(indices=train_idx)
-                eval_dataset = base_dataset.subset(indices=val_idx)
-                train_loader = self.get_train_loader(train_dataset)
-                eval_loader = self.get_eval_loader(eval_dataset)
-                model, transform, optimizer, scheduler = self.get_training_modules(train_loader)
+            outer_train_idx = np.union1d(split.inner_train_idx, split.validation_idx)
+            outer_train_dataset = base_dataset.subset(indices=outer_train_idx)
+            model, outer_transform, optimizer = self.get_training_modules(
+                outer_train_dataset,
+                split.model_seed,
+            )
+            outer_train_loader = self.get_train_loader(outer_train_dataset, split.model_seed)
+            refit_steps = train(
+                model,
+                outer_train_loader,
+                outer_transform,
+                optimizer,
+                selected_epoch,
+                min_steps=self.min_steps,
+            )
 
-                last_epoch = (fold - 1) * self.max_epochs
-                print(f'Fold {trial}-{fold}')
+            test_dataset = base_dataset.subset(indices=split.test_idx)
+            test_loader = self.get_eval_loader(test_dataset)
+            metrics = evaluate(model, test_loader, outer_transform, pbar=True)
 
-                train(model, train_loader, transform, optimizer, scheduler, self.max_epochs,
-                      last_epoch, self.writer, eval_loader)
-                _, r2, mae = evaluate(model, eval_loader, transform, pbar=True, mae=True)
-
-                self.add_results(eval_dataset.properties, r2.cpu().numpy(), mae.cpu().numpy())
-                self.save_checkpoint(f'{output_dir}/fold-{trial}.{fold}.pth', model, transform)
-
-    def _train_full(self, output_dir: str, tasks: list[str]):
-        base_dataset = self.dataset.subset(tasks=tasks)
-        indices = list(range(len(base_dataset)))
-        train_idx, val_idx = train_test_split(indices, test_size=self.eval_size, random_state=self.seed)
-        train_dataset = base_dataset.subset(indices=train_idx)
-        eval_dataset = base_dataset.subset(indices=val_idx)
-        train_loader = self.get_train_loader(train_dataset)
-        eval_loader = self.get_eval_loader(eval_dataset)
-        model, transform, optimizer, scheduler = self.get_training_modules(train_loader)
-
-        train(model, train_loader, transform, optimizer, scheduler, self.max_epochs,
-              writer=self.writer, eval_loader=eval_loader)
-        self.save_checkpoint(f'{output_dir}/full.pth', model, transform)
-
-        _, r2, mae = evaluate(model, eval_loader, transform, pbar=True, mae=True)
-        self.add_results(eval_dataset.properties, r2.cpu().numpy(), mae.cpu().numpy())
+            r2 = metrics['r2'].detach().cpu().numpy()
+            rmse = metrics['rmse'].detach().cpu().numpy()
+            fold_record = {
+                'task': task,
+                'repeat': split.repeat,
+                'fold': split.fold,
+                'selected_epoch': selected_epoch,
+                'selected_steps': selected_epoch * len(inner_train_loader),
+                'refit_steps': refit_steps,
+                'best_validation_r2': best_validation_r2,
+                'n_outer_train': len(outer_train_dataset),
+                'n_test': len(test_dataset),
+                'R2': float(r2[0]),
+                'RMSE': float(rmse[0]),
+            }
+            predictions = pd.DataFrame({
+                'task': task,
+                'repeat': split.repeat,
+                'fold': split.fold,
+                'row_id': test_dataset.row_indices,
+                'group_id': canonical_group_ids(test_dataset.groups),
+                'target': metrics['targets'].detach().cpu().numpy()[:, 0],
+                'prediction': metrics['predictions'].detach().cpu().numpy()[:, 0],
+            })
+            self._save_fold_artifacts(
+                artifact_paths,
+                model,
+                outer_transform,
+                fold_record,
+                predictions,
+            )
+            self.fold_records.append(fold_record)
+            self._save_fold_table()
 
     def train(self):
-        os.makedirs(self.output_dir, exist_ok=True)
-        config_path = os.path.join(self.output_dir, 'config.json')
-        with open(config_path, 'w') as f:
-            json.dump(self.get_config(), f, indent=2)
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        config_path = self.results_dir / 'config.json'
+        config = self.get_config()
+        if self.resume and os.path.isfile(config_path):
+            with open(config_path, encoding='utf-8') as f:
+                previous = json.load(f)
+            if self._resume_settings(previous) != self._resume_settings(config):
+                raise ValueError('Training settings changed; use a new output directory or set resume=False')
+        if not self.resume:
+            (self.results_dir / 'fold_metrics.csv').unlink(missing_ok=True)
+            for task in self.tasks:
+                for record_path in (self.results_dir / task).glob('fold-*.json'):
+                    record_path.unlink()
+        temporary_config_path = f'{config_path}.tmp'
+        with open(temporary_config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        os.replace(temporary_config_path, config_path)
 
         if self.logging_dir is not None:
             self.writer = SummaryWriter(self.logging_dir)
@@ -253,20 +353,17 @@ class MultiTaskTrainer:
                 },
             })
 
-        if self.serial:
-            for task in self.tasks:
-                print(f'Task: {task}')
-                os.makedirs(output_dir := f'{self.output_dir}/{task}', exist_ok=True)
-                self._train_impl(output_dir, [task])
+        for task in self.tasks:
+            print(f'Task: {task}')
+            task_dir = self.results_dir / task
+            task_dir.mkdir(exist_ok=True)
+            self._train_kfold(task_dir, task)
+            score = [record['R2'] for record in self.fold_records if record['task'] == task]
+            ddof = 1 if len(score) > 1 else 0
+            print(f'R2: {np.mean(score):.3f}±{np.std(score, ddof=ddof):.3f}\n')
 
-                score = self.results['R2'][task]
-                ddof = 1 if len(score) > 1 else 0
-                mean, std = np.mean(score), np.std(score, ddof=ddof)
-                print(f'R2: {mean:.3f}±{std:.3f}\n')
-        else:
-            self._train_impl(self.output_dir, self.tasks)
-
-        self.save_results(f'{self.output_dir}/eval.xlsx')
+        self._save_fold_table()
+        self.print_summary()
+        print(f'Results saved to {self.results_dir / "fold_metrics.csv"}')
         if self.writer is not None:
             self.writer.close()
-        print('Finished Training.\n')

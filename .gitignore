@@ -8,6 +8,7 @@ __pycache__/
 # runtime outputs
 /runs/
 /checkpoints/
+/experiments/
 
 # experimental
 src/pretrain/trainer_lejepa.py
@@ -28,8 +29,10 @@ pretrain_mlm.sh
 *.pkl
 *.csv
 
-# visualizations
-/figures/*
-!/figures/style.mplstyle
-!/figures/inference.py
-!/figures/sme_mol.ipynb
+# analysis scripts
+/analysis/*
+# !/analysis/style.mplstyle
+# !/analysis/inference.py
+# !/analysis/sme_mol.ipynb
+# !/analysis/interpretability/
+# !/analysis/downstream/
