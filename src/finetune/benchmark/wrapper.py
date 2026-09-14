@@ -59,7 +59,15 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
             return build_periogt_encoder(bench_path)
 
         case _:
-            model = AutoModel.from_pretrained(encoder_path, output_hidden_states=True)
+            config = AutoConfig.from_pretrained(encoder_path, output_hidden_states=True)
+            model_cls = AutoModel
+            if config.model_type == 'roformer' and getattr(config, 'position_embedding_type', 'rotary') == 'absolute':
+                import sys
+                sys.path.append(str(BENCH_DIR.parents[1]))
+                from pretrain.roformer_abs import RoFormerSinusoidalAbsolute
+
+                model_cls = RoFormerSinusoidalAbsolute
+            model = model_cls.from_pretrained(encoder_path, config=config)
             tokenizer = AutoTokenizer.from_pretrained(encoder_path)
             max_length = model.config.max_position_embeddings
     

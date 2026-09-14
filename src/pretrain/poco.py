@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import RoFormerPreTrainedModel, RoFormerModel
+from roformer_abs import RoFormerSinusoidalAbsolute
 
 
 def mean_pooling(hidden: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -31,7 +32,11 @@ class PolymerContrastModel(RoFormerPreTrainedModel):
         config.update({'proj_hidden_layers': getattr(config, 'proj_hidden_layers', 1)})
         super().__init__(config)
         self.proj_dim = config.proj_dim
-        self.roformer = RoFormerModel(config)
+
+        if getattr(config, 'position_embedding_type', 'rotary') == 'absolute':
+            self.roformer = RoFormerSinusoidalAbsolute(config)
+        else:
+            self.roformer = RoFormerModel(config)
         self.proj = MLP(config.hidden_size, config.intermediate_size, config.proj_dim, config.proj_hidden_layers)
         self.post_init()
 

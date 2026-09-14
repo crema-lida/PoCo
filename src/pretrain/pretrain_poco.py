@@ -80,6 +80,7 @@ def main():
         num_attention_heads=8,
         intermediate_size=2048,
         max_position_embeddings=384,
+        position_embedding_type="rotary",  # set to "absolute" to ablate rotary embeddings
         pad_token_id=tokenizer.pad_token_id,
         proj_hidden_layers=1,
         proj_dim=256,
@@ -96,6 +97,7 @@ def main():
         lr_scheduler_type='constant_with_warmup',
         warmup_steps=5000,
         logging_steps=50,
+        report_to='tensorboard',
         save_steps=5000,
         fp16=True,
         dataloader_drop_last=True,
