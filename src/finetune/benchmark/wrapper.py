@@ -56,6 +56,9 @@ def get_encoder(encoder_path: str) -> Callable[[list[str]], NDArray]:
 
         case 'PerioGT':
             from .PerioGT.encoder import build_periogt_encoder
+            import os
+            os.environ['OPENBLAS_NUM_THREADS'] = '1'
+            os.environ['OMP_NUM_THREADS'] = '1'
             return build_periogt_encoder(bench_path)
 
         case _:
