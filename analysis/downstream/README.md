@@ -12,7 +12,7 @@ Run from this directory:
 python bayesian_comparison.py
 ```
 
-## Outputs (`output/`)
+## Outputs
 
 - `dataset_bayesian_pairs.json`: overall comparisons for each dataset.
 - `task_bayesian_pairs.json`: comparisons for each property.
