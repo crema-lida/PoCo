@@ -1,0 +1,79 @@
+{
+  "model_config": {
+    "hidden_dim": 512,
+    "num_hidden_layers": 1,
+    "dropout": 0.2,
+    "input_dim": 600
+  },
+  "dataset": {
+    "dataset_dir": "datasets/MTL_Khazana",
+    "data_file": "pivot_table.csv",
+    "smiles_column": "smiles",
+    "categories": {
+      "Thermodynamic & physical": [
+        "Eat",
+        "Xc"
+      ],
+      "Electronic": [
+        "Egc",
+        "Egb",
+        "Eea",
+        "Ei"
+      ],
+      "Optical & dielectric": [
+        "nc",
+        "eps"
+      ]
+    },
+    "properties": [
+      "Eat",
+      "Xc",
+      "Egc",
+      "Egb",
+      "Eea",
+      "Ei",
+      "nc",
+      "eps"
+    ],
+    "transforms": {
+      "log10": [],
+      "logm1": []
+    },
+    "encoder": {
+      "path": "PolyCL",
+      "pooling": "cls",
+      "concat_last_layers": null,
+      "embedding_cache": "checkpoints/downstream/MTL/embeddings/PolyCL.npy"
+    }
+  },
+  "tasks": [
+    "Eat",
+    "Xc",
+    "Egc",
+    "Egb",
+    "Eea",
+    "Ei",
+    "nc",
+    "eps"
+  ],
+  "trainer_config": {
+    "output_dir": "checkpoints/downstream/MTL",
+    "experiment_name": "PolyCL",
+    "logging_dir": "runs/downstream/MTL/PolyCL",
+    "device": "cuda",
+    "n_folds": 5,
+    "n_trials": 3,
+    "seed": 42,
+    "max_epochs": 200,
+    "min_steps": 50,
+    "early_stopping_patience": 50,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "train_batch_size": 32,
+    "eval_batch_size": 1024,
+    "inner_validation_size": 0.2,
+    "resume": true,
+    "num_workers": 0,
+    "drop_last": false
+  }
+}

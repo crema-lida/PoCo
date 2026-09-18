@@ -21,6 +21,7 @@ if __name__ == '__main__':
         learning_rate=0.001,
         train_batch_size=32,
         inner_validation_size=0.2,
+        validation_only=False,
         drop_last=False,
         resume=True,
     )

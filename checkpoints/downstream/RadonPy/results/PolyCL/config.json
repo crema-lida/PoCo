@@ -1,0 +1,119 @@
+{
+  "model_config": {
+    "hidden_dim": 512,
+    "num_hidden_layers": 1,
+    "dropout": 0.2,
+    "input_dim": 600
+  },
+  "dataset": {
+    "dataset_dir": "datasets/RadonPy",
+    "data_file": "PI1070.csv",
+    "smiles_column": "smiles",
+    "categories": {
+      "Thermal": [
+        "thermal_conductivity",
+        "thermal_diffusivity",
+        "linear_expansion",
+        "volume_expansion"
+      ],
+      "Thermodynamic & physical": [
+        "density",
+        "Rg",
+        "self-diffusion",
+        "Cp",
+        "Cv"
+      ],
+      "Electronic": [
+        "qm_homo_monomer",
+        "qm_lumo_monomer",
+        "qm_dipole_monomer",
+        "qm_polarizability_monomer"
+      ],
+      "Optical & dielectric": [
+        "static_dielectric_const",
+        "refractive_index"
+      ],
+      "Mechanical": [
+        "compressibility",
+        "isentropic_compressibility",
+        "bulk_modulus",
+        "isentropic_bulk_modulus"
+      ]
+    },
+    "properties": [
+      "thermal_conductivity",
+      "thermal_diffusivity",
+      "linear_expansion",
+      "volume_expansion",
+      "density",
+      "Rg",
+      "self-diffusion",
+      "Cp",
+      "Cv",
+      "qm_homo_monomer",
+      "qm_lumo_monomer",
+      "qm_dipole_monomer",
+      "qm_polarizability_monomer",
+      "static_dielectric_const",
+      "refractive_index",
+      "compressibility",
+      "isentropic_compressibility",
+      "bulk_modulus",
+      "isentropic_bulk_modulus"
+    ],
+    "transforms": {
+      "log10": [
+        "self-diffusion",
+        "static_dielectric_const"
+      ],
+      "logm1": []
+    },
+    "encoder": {
+      "path": "PolyCL",
+      "pooling": "cls",
+      "concat_last_layers": null,
+      "embedding_cache": "checkpoints/downstream/RadonPy/embeddings/PolyCL.npy"
+    }
+  },
+  "tasks": [
+    "thermal_conductivity",
+    "thermal_diffusivity",
+    "linear_expansion",
+    "volume_expansion",
+    "density",
+    "Rg",
+    "self-diffusion",
+    "Cp",
+    "Cv",
+    "qm_homo_monomer",
+    "qm_lumo_monomer",
+    "qm_dipole_monomer",
+    "qm_polarizability_monomer",
+    "static_dielectric_const",
+    "refractive_index",
+    "compressibility",
+    "isentropic_compressibility",
+    "bulk_modulus",
+    "isentropic_bulk_modulus"
+  ],
+  "trainer_config": {
+    "output_dir": "checkpoints/downstream/RadonPy",
+    "experiment_name": "PolyCL",
+    "logging_dir": "runs/downstream/RadonPy/PolyCL",
+    "device": "cuda",
+    "n_folds": 5,
+    "n_trials": 3,
+    "seed": 42,
+    "max_epochs": 200,
+    "min_steps": 50,
+    "early_stopping_patience": 50,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "train_batch_size": 32,
+    "eval_batch_size": 1024,
+    "inner_validation_size": 0.2,
+    "resume": true,
+    "num_workers": 0,
+    "drop_last": false
+  }
+}

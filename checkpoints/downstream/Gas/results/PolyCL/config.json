@@ -1,0 +1,103 @@
+{
+  "model_config": {
+    "hidden_dim": 512,
+    "num_hidden_layers": 1,
+    "dropout": 0.2,
+    "input_dim": 600
+  },
+  "dataset": {
+    "dataset_dir": "datasets/Gas",
+    "data_file": "cleaned.csv",
+    "smiles_column": "smiles_string",
+    "categories": {
+      "Permeability": [
+        "p_exp_CH4",
+        "p_exp_CO2",
+        "p_exp_H2",
+        "p_exp_He",
+        "p_exp_N2",
+        "p_exp_O2"
+      ],
+      "Diffusivity": [
+        "d_exp_CH4",
+        "d_exp_CO2",
+        "d_exp_H2",
+        "d_exp_He",
+        "d_exp_N2",
+        "d_exp_O2"
+      ],
+      "Solubility": [
+        "s_sim_CH4",
+        "s_sim_CO2",
+        "s_sim_N2",
+        "s_sim_O2"
+      ]
+    },
+    "properties": [
+      "p_exp_CH4",
+      "p_exp_CO2",
+      "p_exp_H2",
+      "p_exp_He",
+      "p_exp_N2",
+      "p_exp_O2",
+      "d_exp_CH4",
+      "d_exp_CO2",
+      "d_exp_H2",
+      "d_exp_He",
+      "d_exp_N2",
+      "d_exp_O2",
+      "s_sim_CH4",
+      "s_sim_CO2",
+      "s_sim_N2",
+      "s_sim_O2"
+    ],
+    "transforms": {
+      "log10": [],
+      "logm1": []
+    },
+    "encoder": {
+      "path": "PolyCL",
+      "pooling": "cls",
+      "concat_last_layers": null,
+      "embedding_cache": "checkpoints/downstream/Gas/embeddings/PolyCL.npy"
+    }
+  },
+  "tasks": [
+    "p_exp_CH4",
+    "p_exp_CO2",
+    "p_exp_H2",
+    "p_exp_He",
+    "p_exp_N2",
+    "p_exp_O2",
+    "d_exp_CH4",
+    "d_exp_CO2",
+    "d_exp_H2",
+    "d_exp_He",
+    "d_exp_N2",
+    "d_exp_O2",
+    "s_sim_CH4",
+    "s_sim_CO2",
+    "s_sim_N2",
+    "s_sim_O2"
+  ],
+  "trainer_config": {
+    "output_dir": "checkpoints/downstream/Gas",
+    "experiment_name": "PolyCL",
+    "logging_dir": "runs/downstream/Gas/PolyCL",
+    "device": "cuda",
+    "n_folds": 5,
+    "n_trials": 3,
+    "seed": 42,
+    "max_epochs": 200,
+    "min_steps": 50,
+    "early_stopping_patience": 50,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "train_batch_size": 32,
+    "eval_batch_size": 1024,
+    "inner_validation_size": 0.2,
+    "resume": true,
+    "num_workers": 0,
+    "drop_last": false
+  }
+}

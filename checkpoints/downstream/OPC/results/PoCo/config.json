@@ -1,0 +1,68 @@
+{
+  "model_config": {
+    "hidden_dim": 512,
+    "num_hidden_layers": 1,
+    "dropout": 0.2,
+    "input_dim": 512
+  },
+  "dataset": {
+    "dataset_dir": "datasets/OPC",
+    "data_file": "cleaned.csv",
+    "smiles_column": "SMILES",
+    "categories": {
+      "Thermal": [
+        "Tg",
+        "Tc"
+      ],
+      "Thermodynamic & physical": [
+        "FFV",
+        "Density",
+        "Rg"
+      ]
+    },
+    "properties": [
+      "Tg",
+      "Tc",
+      "FFV",
+      "Density",
+      "Rg"
+    ],
+    "transforms": {
+      "log10": [],
+      "logm1": []
+    },
+    "encoder": {
+      "path": "./checkpoints/PoCo/final",
+      "pooling": "mean",
+      "concat_last_layers": null,
+      "embedding_cache": "checkpoints/downstream/OPC/embeddings/PoCo.npy"
+    }
+  },
+  "tasks": [
+    "Tg",
+    "Tc",
+    "FFV",
+    "Density",
+    "Rg"
+  ],
+  "trainer_config": {
+    "output_dir": "checkpoints/downstream/OPC",
+    "experiment_name": "PoCo",
+    "logging_dir": "runs/downstream/OPC/PoCo",
+    "device": "cuda",
+    "n_folds": 5,
+    "n_trials": 3,
+    "seed": 42,
+    "max_epochs": 200,
+    "min_steps": 50,
+    "early_stopping_patience": 50,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "train_batch_size": 32,
+    "eval_batch_size": 1024,
+    "inner_validation_size": 0.2,
+    "resume": true,
+    "num_workers": 0,
+    "drop_last": false
+  }
+}

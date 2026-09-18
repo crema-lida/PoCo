@@ -1,0 +1,116 @@
+{
+  "model_config": {
+    "hidden_dim": 512,
+    "num_hidden_layers": 1,
+    "dropout": 0.2,
+    "input_dim": 600
+  },
+  "dataset": {
+    "dataset_dir": "datasets/PolyOmics",
+    "data_file": "cleaned.csv",
+    "smiles_column": "smiles_list",
+    "categories": {
+      "Thermal": [
+        "thermal_conductivity",
+        "thermal_diffusivity",
+        "CLTE",
+        "tg"
+      ],
+      "Thermodynamic & physical": [
+        "density",
+        "Rg",
+        "self-diffusion",
+        "Cp",
+        "Cv"
+      ],
+      "Electronic": [
+        "qm_homo_monomer1",
+        "qm_lumo_monomer1",
+        "qm_dipole_monomer1",
+        "qm_polarizability_monomer1"
+      ],
+      "Optical & dielectric": [
+        "static_dielectric_const",
+        "refractive_index"
+      ],
+      "Mechanical": [
+        "compressibility",
+        "isentropic_compressibility",
+        "bulk_modulus",
+        "isentropic_bulk_modulus"
+      ]
+    },
+    "properties": [
+      "thermal_conductivity",
+      "thermal_diffusivity",
+      "CLTE",
+      "tg",
+      "density",
+      "Rg",
+      "self-diffusion",
+      "Cp",
+      "Cv",
+      "qm_homo_monomer1",
+      "qm_lumo_monomer1",
+      "qm_dipole_monomer1",
+      "qm_polarizability_monomer1",
+      "static_dielectric_const",
+      "refractive_index",
+      "compressibility",
+      "isentropic_compressibility",
+      "bulk_modulus",
+      "isentropic_bulk_modulus"
+    ],
+    "transforms": {
+      "log10": [],
+      "logm1": []
+    },
+    "encoder": {
+      "path": "polyBERT",
+      "pooling": "mean",
+      "concat_last_layers": null,
+      "embedding_cache": "checkpoints/downstream/PolyOmics/embeddings/polyBERT.npy"
+    }
+  },
+  "tasks": [
+    "thermal_conductivity",
+    "thermal_diffusivity",
+    "CLTE",
+    "tg",
+    "density",
+    "Rg",
+    "self-diffusion",
+    "Cp",
+    "Cv",
+    "qm_homo_monomer1",
+    "qm_lumo_monomer1",
+    "qm_dipole_monomer1",
+    "qm_polarizability_monomer1",
+    "static_dielectric_const",
+    "refractive_index",
+    "compressibility",
+    "isentropic_compressibility",
+    "bulk_modulus",
+    "isentropic_bulk_modulus"
+  ],
+  "trainer_config": {
+    "output_dir": "checkpoints/downstream/PolyOmics",
+    "experiment_name": "polyBERT",
+    "logging_dir": "runs/downstream/PolyOmics/polyBERT",
+    "device": "cuda",
+    "n_folds": 5,
+    "n_trials": 1,
+    "seed": 42,
+    "max_epochs": 200,
+    "min_steps": 50,
+    "early_stopping_patience": 50,
+    "learning_rate": 0.001,
+    "weight_decay": 0,
+    "train_batch_size": 256,
+    "eval_batch_size": 1024,
+    "inner_validation_size": 0.2,
+    "resume": true,
+    "num_workers": 0,
+    "drop_last": false
+  }
+}

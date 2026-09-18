@@ -1,3 +1,4 @@
+from copy import deepcopy
 import math
 import sys
 
@@ -9,7 +10,8 @@ from .evaluate import evaluate
 
 
 def train(model, train_loader, transform, optimizer, max_epochs=1, last_epoch=0,
-          writer=None, eval_loader=None, patience=None, max_norm=1.0, min_steps=0):
+          writer=None, eval_loader=None, patience=None, max_norm=1.0, min_steps=0,
+          restore_best=False):
     model.train()
     training_loss = None
     device = next(model.parameters()).device
@@ -56,6 +58,8 @@ def train(model, train_loader, transform, optimizer, max_epochs=1, last_epoch=0,
                 best_metric = validation_r2
                 best_epoch = epoch
                 epochs_no_improve = 0
+                if restore_best:
+                    best_state = deepcopy(model.state_dict())
             else:
                 epochs_no_improve += 1
         else:
@@ -83,4 +87,6 @@ def train(model, train_loader, transform, optimizer, max_epochs=1, last_epoch=0,
     if eval_loader is None:
         return optimizer_steps
 
+    if restore_best:
+        model.load_state_dict(best_state)
     return best_epoch, best_metric

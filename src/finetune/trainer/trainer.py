@@ -44,6 +44,7 @@ class MultiTaskTrainer:
     train_batch_size: int = 64
     eval_batch_size: int = 1024
     inner_validation_size: float = 0.2
+    validation_only: bool = False
     resume: bool = True
     num_workers: int = 0
     drop_last: bool = False
@@ -75,6 +76,7 @@ class MultiTaskTrainer:
                 'train_batch_size': self.train_batch_size,
                 'eval_batch_size': self.eval_batch_size,
                 'inner_validation_size': self.inner_validation_size,
+                'validation_only': self.validation_only,
                 'resume': self.resume,
                 'num_workers': self.num_workers,
                 'drop_last': self.drop_last,
@@ -93,6 +95,7 @@ class MultiTaskTrainer:
     @staticmethod
     def _resume_settings(config: dict) -> dict:
         return {
+            'validation_only': config['trainer_config'].get('validation_only', False),
             'model': config['model_config'],
             'dataset': {key: config['dataset'][key] for key in (
                 'dataset_dir', 'data_file', 'smiles_column', 'transforms',
@@ -246,21 +249,24 @@ class MultiTaskTrainer:
             artifact_paths['metrics'].unlink(missing_ok=True)
             (self.results_dir / 'fold_metrics.csv').unlink(missing_ok=True)
             print(f'Fold {split.repeat}-{split.fold}')
-            inner_train_dataset = base_dataset.subset(indices=split.inner_train_idx)
-            validation_dataset = base_dataset.subset(indices=split.validation_idx)
-            model, inner_transform, optimizer = self.get_training_modules(
-                inner_train_dataset,
+            outer_train_idx = np.union1d(split.inner_train_idx, split.validation_idx)
+            train_idx = outer_train_idx if self.validation_only else split.inner_train_idx
+            validation_idx = split.test_idx if self.validation_only else split.validation_idx
+            train_dataset = base_dataset.subset(indices=train_idx)
+            validation_dataset = base_dataset.subset(indices=validation_idx)
+            model, transform, optimizer = self.get_training_modules(
+                train_dataset,
                 split.model_seed,
             )
-            inner_train_loader = self.get_train_loader(inner_train_dataset, split.model_seed)
+            train_loader = self.get_train_loader(train_dataset, split.model_seed)
             validation_loader = self.get_eval_loader(validation_dataset)
             last_epoch = (
                 ((split.repeat - 1) * self.n_folds + split.fold - 1) * self.max_epochs
             )
             selected_epoch, best_validation_r2 = train(
                 model,
-                inner_train_loader,
-                inner_transform,
+                train_loader,
+                transform,
                 optimizer,
                 self.max_epochs,
                 last_epoch=last_epoch,
@@ -268,28 +274,28 @@ class MultiTaskTrainer:
                 eval_loader=validation_loader,
                 patience=self.early_stopping_patience,
                 min_steps=self.min_steps,
+                restore_best=self.validation_only,
             )
-            del model, inner_transform, optimizer
+            if not self.validation_only:
+                del model, transform, optimizer
+                outer_train_dataset = base_dataset.subset(indices=outer_train_idx)
+                model, transform, optimizer = self.get_training_modules(
+                    outer_train_dataset,
+                    split.model_seed,
+                )
+                outer_train_loader = self.get_train_loader(outer_train_dataset, split.model_seed)
+                refit_steps = train(
+                    model,
+                    outer_train_loader,
+                    transform,
+                    optimizer,
+                    selected_epoch,
+                    min_steps=self.min_steps,
+                )
 
-            outer_train_idx = np.union1d(split.inner_train_idx, split.validation_idx)
-            outer_train_dataset = base_dataset.subset(indices=outer_train_idx)
-            model, outer_transform, optimizer = self.get_training_modules(
-                outer_train_dataset,
-                split.model_seed,
-            )
-            outer_train_loader = self.get_train_loader(outer_train_dataset, split.model_seed)
-            refit_steps = train(
-                model,
-                outer_train_loader,
-                outer_transform,
-                optimizer,
-                selected_epoch,
-                min_steps=self.min_steps,
-            )
-
-            test_dataset = base_dataset.subset(indices=split.test_idx)
-            test_loader = self.get_eval_loader(test_dataset)
-            metrics = evaluate(model, test_loader, outer_transform, pbar=True)
+            evaluation_dataset = base_dataset.subset(indices=split.test_idx)
+            evaluation_loader = self.get_eval_loader(evaluation_dataset)
+            metrics = evaluate(model, evaluation_loader, transform, pbar=True)
 
             r2 = metrics['r2'].detach().cpu().numpy()
             rmse = metrics['rmse'].detach().cpu().numpy()
@@ -298,27 +304,32 @@ class MultiTaskTrainer:
                 'repeat': split.repeat,
                 'fold': split.fold,
                 'selected_epoch': selected_epoch,
-                'selected_steps': selected_epoch * len(inner_train_loader),
-                'refit_steps': refit_steps,
+                'selected_steps': selected_epoch * len(train_loader),
                 'best_validation_r2': best_validation_r2,
-                'n_outer_train': len(outer_train_dataset),
-                'n_test': len(test_dataset),
                 'R2': float(r2[0]),
                 'RMSE': float(rmse[0]),
             }
+            if self.validation_only:
+                fold_record.update(n_train=len(train_dataset), n_validation=len(evaluation_dataset))
+            else:
+                fold_record.update(
+                    refit_steps=refit_steps,
+                    n_outer_train=len(outer_train_dataset),
+                    n_test=len(evaluation_dataset),
+                )
             predictions = pd.DataFrame({
                 'task': task,
                 'repeat': split.repeat,
                 'fold': split.fold,
-                'row_id': test_dataset.row_indices,
-                'group_id': canonical_group_ids(test_dataset.groups),
+                'row_id': evaluation_dataset.row_indices,
+                'group_id': canonical_group_ids(evaluation_dataset.groups),
                 'target': metrics['targets'].detach().cpu().numpy()[:, 0],
                 'prediction': metrics['predictions'].detach().cpu().numpy()[:, 0],
             })
             self._save_fold_artifacts(
                 artifact_paths,
                 model,
-                outer_transform,
+                transform,
                 fold_record,
                 predictions,
             )
