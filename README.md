@@ -40,13 +40,12 @@ Use `src/finetune/run_benchmark.py` to reproduce the benchmark results. The adap
 
 | Model | Params (M)<sup>a</sup> | d<sub>rep</sub><sup>b</sup> | [Khazana-MTL](https://doi.org/10.1016/j.patter.2021.100238) | [PolyOmics](https://doi.org/10.48550/arXiv.2511.11626) | [RadonPy](https://doi.org/10.1038/s41524-022-00906-4) | [OPC](https://doi.org/10.48550/arXiv.2512.08896) | [Gas](https://doi.org/10.1038/s41524-024-01373-9) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [polyBERT](https://doi.org/10.1038/s41467-023-39868-6) | 25 | 600 | 0.794 &plusmn; 0.019 | 0.790 &plusmn; 0.002 | 0.817 &plusmn; 0.028 | 0.787 &plusmn; 0.020 | 0.750 &plusmn; 0.029 |
-| [TransPolymer](https://doi.org/10.1038/s41524-023-01016-5) | 82 | 768 | 0.792 &plusmn; 0.017 | 0.795 &plusmn; 0.002 | 0.809 &plusmn; 0.026 | 0.786 &plusmn; 0.027 | 0.762 &plusmn; 0.031 |
-| [PolyCL](https://doi.org/10.1039/d4dd00236a) | 25 | 600 | 0.794 &plusmn; 0.023 | 0.792 &plusmn; 0.001 | 0.813 &plusmn; 0.025 | 0.766 &plusmn; 0.025 | 0.765 &plusmn; 0.023 |
-| [MMPolymer](https://doi.org/10.1145/3627673.3679684) | 129 | 1280 | 0.799 &plusmn; 0.020 | 0.795 &plusmn; 0.002 | 0.815 &plusmn; 0.026 | 0.779 &plusmn; 0.026 | 0.761 &plusmn; 0.022 |
-| [PerioGT](https://doi.org/10.1038/s43588-025-00903-9) | 91 | 2304 | 0.810 &plusmn; 0.025 | <ins>0.805 &plusmn; 0.002</ins> | 0.827 &plusmn; 0.021 | <ins>0.792 &plusmn; 0.022</ins> | <ins>0.779 &plusmn; 0.022</ins> |
-| PoCo | 10 | 512 | <ins>0.815 &plusmn; 0.016</ins> | 0.800 &plusmn; 0.001 | <ins>0.830 &plusmn; 0.026</ins> | <ins>0.792 &plusmn; 0.023</ins> | **0.786 &plusmn; 0.025** |
-| PoCo<sub>concat</sub> | 10 | 1536 | **0.822 &plusmn; 0.015** | **0.806 &plusmn; 0.001** | **0.842 &plusmn; 0.024** | **0.803 &plusmn; 0.022** | **0.786 &plusmn; 0.025** |
+| [polyBERT](https://doi.org/10.1038/s41467-023-39868-6) | 25 | 600 | 0.734 &plusmn; 0.057 | 0.784 &plusmn; 0.001 | 0.777 &plusmn; 0.015 | <ins>0.741 &plusmn; 0.023</ins> | 0.676 &plusmn; 0.040 |
+| [TransPolymer](https://doi.org/10.1038/s41524-023-01016-5) | 82 | 768 | 0.741 &plusmn; 0.029 | 0.788 &plusmn; 0.003 | 0.755 &plusmn; 0.027 | 0.735 &plusmn; 0.027 | 0.645 &plusmn; 0.054 |
+| [PolyCL](https://doi.org/10.1039/d4dd00236a) | 25 | 600 | 0.738 &plusmn; 0.037 | 0.786 &plusmn; 0.002 | 0.765 &plusmn; 0.014 | 0.727 &plusmn; 0.028 | 0.695 &plusmn; 0.031 |
+| [MMPolymer](https://doi.org/10.1145/3627673.3679684) | 129 | 1280 | 0.738 &plusmn; 0.036 | 0.787 &plusmn; 0.002 | 0.765 &plusmn; 0.013 | 0.724 &plusmn; 0.039 | 0.646 &plusmn; 0.051 |
+| [PerioGT](https://doi.org/10.1038/s43588-025-00903-9) | 91 | 2304 | <ins>0.759 &plusmn; 0.041</ins> | **0.797 &plusmn; 0.001** | <ins>0.786 &plusmn; 0.015</ins> | 0.674 &plusmn; 0.197 | **0.712 &plusmn; 0.029** |
+| PoCo | 10 | 512 | **0.772 &plusmn; 0.044** | <ins>0.795 &plusmn; 0.001</ins> | **0.798 &plusmn; 0.012** | **0.758 &plusmn; 0.030** | <ins>0.710 &plusmn; 0.029</ins> |
 
 <sup>a</sup> Number of parameters in millions.  
 <sup>b</sup> Representation dimension.
