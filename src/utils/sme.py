@@ -2,6 +2,7 @@ import numpy as np
 import os
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager, nullcontext
+from functools import partial
 import multiprocessing as mp
 from typing import Optional
 
@@ -167,9 +168,14 @@ def compute_fragment_stats(df_occurrence: pd.DataFrame) -> pd.DataFrame:
     return df_stats.loc[:, _STATS_COLUMNS]
 
 
-def _build_gram_fragments(args):
+def _build_gram_fragments(args, bond_weight):
     smiles, tokens, embeds = args
-    result = make_gram_fragments(smiles, tokens, embeds)
+    result = make_gram_fragments(
+        smiles, tokens, embeds,
+        w_double=bond_weight,
+        w_triple=bond_weight,
+        w_aromatic=bond_weight,
+    )
     frag_ids = result.get("frag_ids", [])
     fragments = result.get("fragments", [])
     atom_groups = result.get("atom_groups", [])
@@ -278,6 +284,7 @@ def run_sme(
     num_workers: Optional[int] = 1,
     intra_mol_mean: bool = True,
     return_stats: bool = True,
+    bond_weight: float = 0.6,
 ) -> tuple[pd.DataFrame, Optional[pd.DataFrame]]:
     """
     Run substructure masking and compute fragment statistics fully in memory with pandas.
@@ -294,6 +301,7 @@ def run_sme(
         intra_mol_mean: Whether to average repeated occurrences of the same fragment within
             one molecule.
         return_stats: Whether to compute and return df_stats.
+        bond_weight: Weight added to double, triple, and aromatic bonds in Gram fragmentation.
 
     Returns:
         (df_occurrence, df_stats or None)
@@ -303,6 +311,8 @@ def run_sme(
     if frag_builder is None:
         raise ValueError(f"Unsupported fragmentation method: {method}")
     use_embeds = method == "gram"
+    if use_embeds:
+        frag_builder = partial(frag_builder, bond_weight=bond_weight)
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
