@@ -18,7 +18,6 @@ Measure whether atom similarities and fragment cuts remain consistent across dif
 ```bash
 python run_views.py
 python summarize_views.py
-python plot_summary.py
 ```
 
 ## BRICS fragment correspondence
@@ -30,3 +29,5 @@ python run_fragments.py
 python summarize_fragments.py
 python analyze_blocks.py
 ```
+
+Run `python plot_summary.py` after both analyses to plot the BRICS and SMILES comparisons together.

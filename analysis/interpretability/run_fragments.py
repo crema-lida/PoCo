@@ -111,8 +111,8 @@ def prepare(size, out):
     return samples
 
 
-def encode(samples, name, path, saved):
-    if saved.exists():
+def encode(samples, name, path, saved=None):
+    if saved is not None and saved.exists():
         with np.load(saved) as cache:
             return [cache[str(i)] for i in range(len(samples))]
     tokenizer = AutoTokenizer.from_pretrained(path, local_files_only=True)
@@ -137,7 +137,8 @@ def encode(samples, name, path, saved):
                 grams.append((emb @ emb.T).cpu().numpy())
             if start % 256 == 0:
                 log(f'{name}: encoded {min(start + BATCH_SIZE, len(samples))}/{len(samples)}')
-    np.savez_compressed(saved, **{str(i): g for i, g in enumerate(grams)})
+    if saved is not None:
+        np.savez_compressed(saved, **{str(i): g for i, g in enumerate(grams)})
     del model
     gc.collect()
     torch.cuda.empty_cache()
@@ -198,15 +199,14 @@ def main():
         for i, (sample, d, gram) in enumerate(zip(samples, descriptions, grams)):
             rng = np.random.default_rng(2026 + i)
             variants = [('native', 0, gram)]
-            if name != 'random':
-                for repeat in range(1, 4):
-                    order = np.arange(len(gram))
-                    groups = defaultdict(list)
-                    for atom, key in enumerate(d['keys']):
-                        groups[key].append(atom)
-                    for group in groups.values():
-                        order[group] = rng.permutation(group)
-                    variants.append(('same_type_shuffle', repeat, gram[np.ix_(order, order)]))
+            for repeat in range(1, 4):
+                order = np.arange(len(gram))
+                groups = defaultdict(list)
+                for atom, key in enumerate(d['keys']):
+                    groups[key].append(atom)
+                for group in groups.values():
+                    order[group] = rng.permutation(group)
+                variants.append(('same_type_shuffle', repeat, gram[np.ix_(order, order)]))
             for variant, repeat, g in variants:
                 meta = dict(index=i, dataset=sample['dataset'], row_id=sample['row_id'],
                             model=name, variant=variant, repeat=repeat)

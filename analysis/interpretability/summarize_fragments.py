@@ -2,7 +2,7 @@
 from collections import defaultdict
 import json
 import os
-from config import OUTPUT_DIR, MODELS, CPU_THREADS
+from config import OUTPUT_DIR, MODELS, CPU_THREADS, EVALUATION_SIZE
 
 os.environ['OMP_NUM_THREADS'] = str(CPU_THREADS)
 os.environ['MKL_NUM_THREADS'] = str(CPU_THREADS)
@@ -51,7 +51,8 @@ def shuffle_means(rows, fields):
         for field in fields:
             values = [value(row, field) for row in repeats]
             available = [v for v in values if np.isfinite(v)]
-            means[index][field] = float(np.mean(available)) if available else None
+            means[index][field] = (available[0] + float(np.mean(np.asarray(available) - available[0]))
+                                   if available else None)
     return means
 
 
@@ -144,11 +145,11 @@ def report(summary):
             m = row[kind]
             lines.append(f"| {row['dataset']} | {kind} | {fmt(m['single_nonring_auc'])} | "
                          f"{fmt(m['single_nonring_matched_cut_recall'])} | {fmt(m['matched_block_gap'])} |")
-    lines += ['', '## Threshold 0.6 with bond boost 0.6', '',
+    lines += ['', '## Cutoff 0.6 without bond type weighting', '',
               '| Dataset | Model | n | Macro F1 | Pooled F1 | ARI | Fragments | Mean size | Largest fraction |',
               '|---|---|---|---|---|---|---|---|---|']
     for row in summary['thresholds']:
-        if (row['scope'], row['threshold'], row['boost']) != ('mixed_brics_bonds', 0.6, 0.6):
+        if (row['scope'], row['threshold'], row['boost']) != ('mixed_brics_bonds', 0.6, 0.0):
             continue
         m = row['native']
         cells = [f"{m[k]['mean']:.3f}" if m[k]['mean'] is not None else 'NA'
@@ -171,23 +172,31 @@ def report(summary):
 
 def main():
     out = OUTPUT_DIR
+    candidates = defaultdict(list)
+    for row in read_rows(out / 'PoCo_metrics.jsonl'):
+        if row['variant'] == 'native' and 0 < row['all_cuts'] < row['all_bonds']:
+            candidates[row['dataset']].append(row['index'])
+    selected_indices = {dataset: set(indices[:EVALUATION_SIZE])
+                        for dataset, indices in candidates.items()}
     metric_groups, threshold_groups = defaultdict(list), defaultdict(list)
     for model in sorted(MODELS):
         path = out / f'{model}_metrics.jsonl'
         for row in read_rows(path):
-            metric_groups[(row['dataset'], row['model'])].append(row)
+            if row['index'] in selected_indices[row['dataset']]:
+                metric_groups[(row['dataset'], row['model'])].append(row)
     for model in sorted(MODELS):
         path = out / f'{model}_thresholds.jsonl'
         for row in read_rows(path):
-            threshold_groups[(row['dataset'], row['model'], row['boost'], row['threshold'])].append(row)
+            if row['index'] in selected_indices[row['dataset']]:
+                threshold_groups[(row['dataset'], row['model'], row['boost'], row['threshold'])].append(row)
     summary = {'bootstrap_replicates': REPLICATES, 'bootstrap_seed': 20260910,
                'sample_counts': json.loads((out / 'sample_counts.json').read_text(encoding='utf-8')),
+               'selected_indices': {dataset: sorted(indices) for dataset, indices in selected_indices.items()},
                'metrics': [], 'comparisons': [], 'thresholds': []}
-    maps, mixed = {}, {}
+    maps = {}
     for key, rows in sorted(metric_groups.items()):
         result, native, shuffled = grouped_stats(rows, METRICS)
         maps[key] = (native, shuffled)
-        mixed[key] = {i for i, row in native.items() if 0 < row['all_cuts'] < row['all_bonds']}
         summary['metrics'].append(dict(dataset=key[0], model=key[1], **result))
     for dataset in sorted({key[0] for key in maps}):
         if (dataset, 'PoCo') not in maps or (dataset, 'MLM') not in maps:
@@ -202,17 +211,14 @@ def main():
             native=paired_stats(poco, mlm, METRICS), context_gain=paired_stats(*gains, METRICS)))
     for key, rows in sorted(threshold_groups.items()):
         dataset, model, boost, threshold = key
-        for scope in ('all_structures', 'mixed_brics_bonds'):
-            selected = rows if scope == 'all_structures' else [
-                row for row in rows if row['index'] in mixed[(dataset, model)]]
-            result, native, shuffled = grouped_stats(selected, THRESHOLD_METRICS)
-            result['native_pooled_f1'] = pooled_f1(list(native.values()))
-            if shuffled:
-                shuffled_counts = shuffle_means(selected, ['tp', 'fp', 'fn'])
-                result['shuffle_pooled_f1'] = pooled_f1(list(shuffled_counts.values()))
-                result['native_minus_shuffle_pooled_f1'] = paired_pooled_f1(native, shuffled_counts)
-            summary['thresholds'].append(dict(dataset=dataset, model=model, boost=boost,
-                                               threshold=threshold, scope=scope, **result))
+        result, native, shuffled = grouped_stats(rows, THRESHOLD_METRICS)
+        result['native_pooled_f1'] = pooled_f1(list(native.values()))
+        if shuffled:
+            shuffled_counts = shuffle_means(rows, ['tp', 'fp', 'fn'])
+            result['shuffle_pooled_f1'] = pooled_f1(list(shuffled_counts.values()))
+            result['native_minus_shuffle_pooled_f1'] = paired_pooled_f1(native, shuffled_counts)
+        summary['thresholds'].append(dict(dataset=dataset, model=model, boost=boost,
+            threshold=threshold, scope='mixed_brics_bonds', **result))
     (out / 'summary.json').write_text(json.dumps(summary, indent=2, allow_nan=False), encoding='utf-8')
     (out / 'results.md').write_text(report(summary), encoding='utf-8')
     print(f'Summarized {len(metric_groups)} dataset/model groups into {out}')
