@@ -17,10 +17,7 @@ output/
 /experiments/
 
 # experimental
-src/finetune/run_ablation.py
 src/pretrain/trainer_lejepa.py
-src/pretrain/pretrain_mlm.py
-pretrain_mlm.sh
 
 # data files
 /_papers-repos/

@@ -1,3 +1,9 @@
+# Additional baseline dependencies:
+# dgl==2.5 (PerioGT): https://github.com/dmlc/dgl
+# dgllife==0.3.2 (PerioGT): PyPI
+# mordredcommunity==2.0.7 (PerioGT): PyPI
+# unicore==0.0.1 (MMPolymer): https://github.com/dptech-corp/Uni-Core
+
 import multiprocessing as mp
 from pathlib import Path
 

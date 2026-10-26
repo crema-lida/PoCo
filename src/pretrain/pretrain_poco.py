@@ -155,6 +155,8 @@ def main():
         processing_class=tokenizer,
         **moco_config,
     )
+    if not args.resume_checkpoint:
+        trainer.save_model(f'{training_args.output_dir}/checkpoint-0')
     trainer.train(resume_from_checkpoint=args.resume_checkpoint)
 
     output_dir = f'{training_args.output_dir}/final'

@@ -17,8 +17,8 @@ from psmiles import PolymerSmiles as PS
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-INPUT_PATH  = Path("./datasets/OMG/OMG_polymers.csv")
-OUTPUT_PATH = Path("./datasets/OMG/cleaned/OMG_polymers.csv")
+INPUT_PATH  = Path("./datasets/PI1M/PI1M.csv")
+OUTPUT_PATH = Path("./datasets/PI1M/cleaned/train.csv")
 
 # I/O tuning ----------------------------------------------------------------
 BATCH_LINES    = 8192          # flush after this many output lines
